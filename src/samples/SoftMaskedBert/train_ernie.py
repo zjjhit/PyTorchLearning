@@ -3,11 +3,13 @@
 
 import os
 
+import paddle.fluid as fluid
 import pandas as pd
 import tqdm
 from ernie.modeling_ernie import ErnieModel
 from ernie.optimization import AdamW, LinearDecay
 from ernie.tokenizing_ernie import ErnieTokenizer
+from torch.utils.data import Dataset
 
 from model.soft_masked_ernie import SoftMaskedErnie
 from optim_schedule import ScheduledOptim
@@ -19,7 +21,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 class SoftMaskedErnieTrainer():
 
     def __init__(self, args, ernie, tokenizer, device, hidden=256, layer_n=1, lr=2e-5, gama=0.8, betas=(0.9, 0.999), weight_decay=0.01,
-                 warmup_steps=10000):
+                 warmup_steps=10000, g_clip=0.001):
 
         self.device = device
         self.tokenizer = tokenizer
@@ -27,10 +29,10 @@ class SoftMaskedErnieTrainer():
 
         opt = AdamW(
             learning_rate=LinearDecay(args.lr, int(args.warmup_proportion * args.max_steps), args.max_steps),
-            parameter_list=model.parameters(),
+            parameter_list=self.model.parameters(),
             weight_decay=args.wd, grad_clip=g_clip)
 
-        self.optim_schedule = ScheduledOptim(optim, hidden, n_warmup_steps=warmup_steps)
+        self.optim_schedule = ScheduledOptim(opt, hidden, n_warmup_steps=warmup_steps)
         self.criterion_c = fluid.dygraph.NLLLoss()
         self.criterion_d = fluid.dygraph.BCELoss()
 
