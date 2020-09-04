@@ -3,9 +3,10 @@
 
 import torch
 import torch.nn as nn
-from pytorch_transformers import BertTokenizer, BertModel, BertConfig
+# from pytorch_transformers import BertTokenizer, BertModel, BertConfig
+from transformers import BertModel, BertTokenizer, BertConfig
 
-from .decotor import BiGRU
+from model.decotor import BiGRU
 
 
 class SoftMaskedBert(nn.Module):
@@ -88,6 +89,7 @@ class SoftMaskedBert(nn.Module):
 
                 batch_size, seq_length = input_shape
                 seq_ids = torch.arange(seq_length, device=device)
+                ###构造上三角阵  ，为何如此繁琐？
                 causal_mask = seq_ids[None, None, :].repeat(batch_size, seq_length, 1) <= seq_ids[None, :, None]
                 causal_mask = causal_mask.to(
                     attention_mask.dtype
@@ -169,7 +171,7 @@ if __name__ == "__main__":
     ids = tokenizer.convert_tokens_to_ids(token)
     ids = torch.Tensor([ids]).long()
     print(ids)
-    input_mask = torch.tensor([[0, 1, 0]])
+    input_mask = torch.tensor([[1, 1, 0]])
     segment_ids = torch.tensor([[0, 0, 0]])
     out = model(ids, input_mask, segment_ids)
     # out = bert(ids)

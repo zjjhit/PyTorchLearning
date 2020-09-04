@@ -65,6 +65,16 @@ def load_pinyin_dict(file_path):
 
 
 def random_word(sentence, char_pinyin_dict, char_dict, confusion_dict=None):
+    '''
+
+    :param sentence:
+    :param char_pinyin_dict:
+    :param char_dict:
+    :param confusion_dict:
+    :return:
+    tokens:随机后的句子
+    out: 对应的修改标记
+    '''
     tokens = [x for x in sentence]
     out = []
     for i, token in enumerate(sentence):
