@@ -45,89 +45,80 @@ class DSSMOne(nn.Module):
         # learning gamma
         self.learn_gamma = nn.Conv1d(self.latent_out * 2, 1, 1)
 
-        def forward(self, data):
-            ## Batch*Len*Dim --> Batch*Dim* Len
-            data = {key: value.to(self.device).transpose(1, 2) for key, value in data.items()}
-            q, d = data['query_'], data['doc_']  ###待匹配的两个句子
+    def forward(self, data):
+        ## Batch*Len*Dim --> Batch*Dim* Len
+        data = {key: value.to(self.device).transpose(1, 2) for key, value in data.items()}
+        q, d = data['query_'], data['doc_']  ###待匹配的两个句子
 
-            ### query
-            q_c = F.tanh(self.query_conv(q))
-            q_k = kmax_pooling(q_c, 2, self.kmax)
-            q_k = q_k.transpose(1, 2)
-            q_s = F.tanh(self.query_sem(q_k))
-            # q_s = q_s.resize(self.latent_out)
-            b_, k_, l_ = q_s.size()
-            q_s = q_s.contiguous().view((b_, k_ * l_))
+        ### query
+        q_c = F.tanh(self.query_conv(q))
+        q_k = kmax_pooling(q_c, 2, self.kmax)
+        q_k = q_k.transpose(1, 2)
+        q_s = F.tanh(self.query_sem(q_k))
+        # q_s = q_s.resize(self.latent_out)
+        b_, k_, l_ = q_s.size()
+        q_s = q_s.contiguous().view((b_, k_ * l_))
 
-            ###doc
-            d_c = F.tanh(self.doc_conv(d))
-            d_k = kmax_pooling(d_c, 2, self.kmax)
-            d_k = d_k.transpose(1, 2)
-            d_s = F.tanh(self.doc_sem(d_k))
-            # d_s = d_s.resize(self.latent_out)
-            d_s = d_s.contiguous().view((b_, k_ * l_))
+        ###doc
+        d_c = F.tanh(self.doc_conv(d))
+        d_k = kmax_pooling(d_c, 2, self.kmax)
+        d_k = d_k.transpose(1, 2)
+        d_s = F.tanh(self.doc_sem(d_k))
+        # d_s = d_s.resize(self.latent_out)
+        d_s = d_s.contiguous().view((b_, k_ * l_))
 
-            ###双塔结构向量拼接
-            out_ = torch.cat((q_s, d_s), 1)
-            out_ = out_.unsqueeze(2)
+        ###双塔结构向量拼接
+        out_ = torch.cat((q_s, d_s), 1)
+        out_ = out_.unsqueeze(2)
 
-            with_gamma = self.learn_gamma(out_)
-            return with_gamma
+        with_gamma = self.learn_gamma(out_)  ### --> B * 2 * 1
+        with_gamma = with_gamma.contiguous().view(b_, -1)
+        return with_gamma
 
 
-# Build a random data set.
-import numpy as np
+def test():
+    # Build a random data set.
+    import numpy as np
+    from torch.autograd import Variable
+    from transformers import BertConfig
 
-sample_size = 10
-l_Qs = []
-pos_l_Ds = []
+    config = BertConfig.from_pretrained('./config.json')
+    sample_size = 10
+    l_Qs = []
+    pos_l_Ds = []
 
-(query_len, doc_len) = (5, 100)
+    for i in range(sample_size):
+        query_len = np.random.randint(1, 10)
+        l_Q = np.random.rand(5, query_len, config.hidden_size)
+        l_Qs.append(l_Q)
 
-for i in range(sample_size):
-    query_len = np.random.randint(1, 10)
-    l_Q = np.random.rand(1, query_len, WORD_DEPTH)
-    l_Qs.append(l_Q)
+        doc_len = np.random.randint(50, 500)
+        l_D = np.random.rand(5, doc_len, config.hidden_size)
+        pos_l_Ds.append(l_D)
 
-    doc_len = np.random.randint(50, 500)
-    l_D = np.random.rand(1, doc_len, WORD_DEPTH)
-    pos_l_Ds.append(l_D)
+    # Till now, we have made a complete numpy dataset
+    # Now let's convert the numpy variables to torch Variable
 
-neg_l_Ds = [[] for j in range(J)]
-for i in range(sample_size):
-    possibilities = list(range(sample_size))
-    possibilities.remove(i)
-    negatives = np.random.choice(possibilities, J, replace=False)
-    for j in range(J):
-        negative = negatives[j]
-        neg_l_Ds[j].append(pos_l_Ds[negative])
+    for i in range(len(l_Qs)):
+        l_Qs[i] = Variable(torch.from_numpy(l_Qs[i]).float())
+        pos_l_Ds[i] = Variable(torch.from_numpy(pos_l_Ds[i]).float())
 
-# Till now, we have made a complete numpy dataset
-# Now let's convert the numpy variables to torch Variable
+    model = DSSMOne(config)
 
-for i in range(len(l_Qs)):
-    l_Qs[i] = Variable(torch.from_numpy(l_Qs[i]).float())
-    pos_l_Ds[i] = Variable(torch.from_numpy(pos_l_Ds[i]).float())
-    for j in range(J):
-        neg_l_Ds[j][i] = Variable(torch.from_numpy(neg_l_Ds[j][i]).float())
+    # Loss and optimizer
+    criterion = torch.nn.BCEWithLogitsLoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
 
-# Loss and optimizer
-criterion = torch.nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
+    # output variable, remember the cosine similarity with positive doc was at 0th index
+    y = torch.randn(10, 5)
+    y = (y > 0).int().float()
 
-# output variable, remember the cosine similarity with positive doc was at 0th index
-y = np.ndarray(1)
-# CrossEntropyLoss expects only the index as a long tensor
-y[0] = 0
-y = Variable(torch.from_numpy(y).long())
+    for i in range(sample_size):
+        y_pred = model({'query_': l_Qs[i], 'doc_': pos_l_Ds[i]})
 
-for i in range(sample_size):
-    y_pred = model(l_Qs[i], pos_l_Ds[i], [neg_l_Ds[j][i] for j in range(J)])
-    loss = criterion(y_pred.resize(1, J + 1), y)
-    print(i, loss)
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-
-if __name__ == '__main__':
-    pass
+        b_, _ = y_pred.shape
+        print(i, y_pred.shape, y_pred.view(b_, -1).shape)
+        loss = criterion(y_pred.view(b_, -1), y[i].view(b_, -1))
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
