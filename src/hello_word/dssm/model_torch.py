@@ -27,8 +27,8 @@ class DSSMOne(nn.Module):
 
         self.device = device
         ###此部分的信息有待处理
-        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
-        self.word_embeddings.to(self.device)  ###????
+        self.embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
+        self.embeddings.to(self.device)  ###????
 
         self.latent_out = config.latent_out_1
         self.hidden_size = config.hidden_size
@@ -46,9 +46,14 @@ class DSSMOne(nn.Module):
         self.learn_gamma = nn.Conv1d(self.latent_out * 2, 1, 1)
 
     def forward(self, data):
+        # data_loader = tqdm.tqdm(enumerate(data_set),
+        #                         total=len(data_set))
+
+        # for i, data in data_loader:
         ## Batch*Len*Dim --> Batch*Dim* Len
-        data = {key: value.to(self.device).transpose(1, 2) for key, value in data.items()}
-        q, d = data['query_'], data['doc_']  ###待匹配的两个句子
+        # data = {key: value.to(self.device).transpose(1, 2) for key, value in data.items()}
+        # data = {key: value.to(self.device) for key, value in data_set.items()}
+        q, d = self.embeddings(data['query_']).transpose(1, 2), self.embeddings(data['doc_']).transpose(1, 2)  ###待匹配的两个句子
 
         ### query
         q_c = F.tanh(self.query_conv(q))
@@ -74,6 +79,12 @@ class DSSMOne(nn.Module):
         with_gamma = self.learn_gamma(out_)  ### --> B * 2 * 1
         with_gamma = with_gamma.contiguous().view(b_, -1)
         return with_gamma
+
+    # def train(self, data):
+    #
+    #
+    # def evaluate(self, data):
+    #     pass
 
 
 def test():

@@ -36,7 +36,7 @@ class SoftMaskedBertTrainer():
         optim = Adam(self.model.parameters(), lr=lr, betas=betas, weight_decay=weight_decay)
         self.optim_schedule = ScheduledOptim(optim, hidden, n_warmup_steps=warmup_steps)
         self.criterion_c = nn.NLLLoss()
-        self.criterion_d = nn.BCELoss()
+        self.xcriterion_d = nn.BCELoss()
         self.gama = gama
         self.log_freq = 10
 
@@ -60,7 +60,7 @@ class SoftMaskedBertTrainer():
         # self.model.to(self.device)
 
     def inference(self, data_loader):
-        self.model.eval()
+        self.model.eval()  # ??
         out_put = []
         data_loader = tqdm.tqdm(enumerate(data_loader),
                                 desc="%s" % 'Inference:',

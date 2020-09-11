@@ -1,8 +1,9 @@
 {
   "batch_size": 128,
   "hidden_size": 256,
-  "latent_out_1": 512,
+  "latent_out_1": 256,
   "kernel_out_1": 128,
   "kernel_size": 1,
-  "kmax": 1
+  "kmax": 1,
+  "vocab_size": 89
 }

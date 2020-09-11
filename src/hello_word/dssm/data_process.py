@@ -1,9 +1,10 @@
 import pickle
 
+import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-BASE_DATA_PATH = '../data/'
+BASE_DATA_PATH = './data/'
 
 
 class DSSMCharDataset(Dataset):
@@ -11,13 +12,13 @@ class DSSMCharDataset(Dataset):
     基于字符的 数据集合
     """
 
-    def __init__(self, dataset, vocab, max_len=256, mode='train'):
+    def __init__(self, dataset, vocab, max_len=256, model='train'):
         self.dataset = dataset
         self.max_len = max_len
         self.data_size = len(dataset)
-        self.mode = mode
         self.vocab = vocab
-        self.doData = {}
+        self.model = model
+        self.DataDict = {}
         self.__preData__()
 
     def __len__(self):
@@ -26,10 +27,12 @@ class DSSMCharDataset(Dataset):
     def convert_tokens_to_ids(self, query):
         ids_ = []
         for one in query:
+            if one.isalpha():
+                one = one.upper()
             if one in self.vocab:
                 ids_.append(self.vocab[one])
             else:
-                ids_.append(self.vocab['UNK'])
+                ids_.append(self.vocab['<UNK>'])
         return ids_
 
     def __preData__(self):
@@ -40,13 +43,16 @@ class DSSMCharDataset(Dataset):
 
         for i in range(len(self.dataset)):
             item = self.dataset.iloc[i]
-            query_ = item['query_']
+
+            text_ = item['origin'].split('\001\002')
+
+            query_ = text_[0]
             query_ = query_[:min(len(query_), self.max_len)]
             # convert to ids
             query_ids = self.convert_tokens_to_ids(query_)
             query_ids = query_ids + [0] * (self.max_len - len(query_ids))
 
-            doc_ = item['doc_']
+            doc_ = text_[1]
             doc_ = doc_[:min(len(doc_), self.max_len)]
             doc_ids = self.convert_tokens_to_ids(doc_)
             doc_ids = doc_ids + [0] * (self.max_len - len(doc_ids))
@@ -56,33 +62,40 @@ class DSSMCharDataset(Dataset):
                 'doc_': torch.tensor(doc_ids)
             }
 
-            self.doData[i] = output
+            if self.model == 'train':
+                label_ = item['label']
+                output['label_'] = np.float32(label_)  # torch.tensor(label_)
+
+            self.DataDict[i] = output
 
     def __getitem__(self, item):
-        return self.doData[item]
+        return self.DataDict[item]
 
 
-# import pandas
-
-
-def vocab_build(dict_, min_count=-float("inf")):
+def vocab_build(dict_path, min_count=-float("inf")):
     """
     :param dict_  字符集合与对应频率
     :param min_count: 最小词频
     :return:  word2id = {'<PAD>':0, 'word1':id_1, ……， '<UNK>':id_n}
     """
+    with open(dict_path, 'rb') as f:
+        dict_ = pickle.load(f)
 
     word2id = {}
     new_id = 1
     for char in dict_.keys():
         if dict_[char] < min_count:
             continue
+        if char.isalpha():
+            char = char.upper()
         word2id[char] = new_id  # word2id = {'<PAD>':0, 'word1':id_1, ......, '<UNK>':id_n}
         new_id += 1
     word2id['<UNK>'] = new_id
     word2id['<PAD>'] = 0
     print("len(word2id):", len(word2id))
-    fout = open(BASE_DATA_PATH + '/' + 'word2id.vocab', 'wb')
+    for k in word2id:
+        print(k, word2id[k])
+    fout = open(BASE_DATA_PATH + '/' + 'char2id.vocab', 'wb')
     pickle.dump(word2id, fout)
     fout.close()
     return word2id
@@ -142,7 +155,7 @@ def makeTrainPosData(path):
                     if f_ != 1:
                         continue
                     else:
-                        train.add(t_[i] + '\001\001' + j)
+                        train.add(t_[i] + '\001\002' + j)
 
     print(len(train))
     fout = open(BASE_DATA_PATH + '/data.train.pos', 'w')
@@ -406,3 +419,4 @@ def makeTrainData(pos_path, neg_path, neg_path_0=''):
 # makeTrainNegData('../data/data.log')
 
 # makeTrainData('../data/data.train.pos', '../data/data.train.neg1', '../data/data.train.neg0')
+# vocab_build('../data/char.dict')
