@@ -181,20 +181,23 @@ def makeCharDict(path_):
             if len(tmp_) != 5 or tmp_[-2] == 'NULL' or tmp_[-1] == 'NULL':
                 continue
             for chr_ in tmp_[-2]:
+                if chr_.isalpha():
+                    chr_ = chr_.lower()
                 if chr_ not in dict_:
-                    if chr_.isalpha():
-                        chr_ = chr_.lower()
                     dict_[chr_] = 1
                 else:
                     dict_[chr_] += 1
 
     print(len(dict_))
-
+    tmp_ = []
     for k in dict_:
         if dict_[k] < 1000:
-            del dict_[k]
+            tmp_.append(k)
         else:
             print(k, dict_[k])
+
+    for k in tmp_:
+        del dict_[k]
 
     fout = open('./data/char.dict', 'wb')
     pickle.dump(dict_, fout)
@@ -207,5 +210,5 @@ if __name__ == '__main__':
     # preData('./data/com.xml')
     # preDataTwo('./data/data.dbc')
     # preDataThree('./data/companys.accdb')
-    # tmpData('./data/train.data.loc')
-    makeCharDict('./data/data.log')
+    tmpData('./data/train.data.loc')
+    # makeCharDict('./data/data.log')
