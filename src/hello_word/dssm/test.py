@@ -48,15 +48,17 @@ def test():
             # print(data_['label_'].shape)
 
             org_ = data_['origin_']
-            label_ = data_['label_'].unsqueeze(1)
+            label_ = data_['label_']
             # query_ = data_['query_'].unsqueeze(1)
             # doc_ = data_['doc_'].unsqueeze(1)
             print(y_pred)
-            k_ = torch.max(y_pred, 1)[1].unsqueeze(1)
-            tmp_ = torch.cat((k_, label_), dim=1)
+            k_ = torch.max(y_pred, 1)[1]
+            tmp_ = torch.stack((k_, label_), dim=0)
 
             print(tmp_)
-            print(org_)
+            acc_ = sum(k_ == label_)
+            # print(org_)
+            print(acc_.item(), b_, float(acc_.item()) / b_)
 
 
 if __name__ == '__main__':

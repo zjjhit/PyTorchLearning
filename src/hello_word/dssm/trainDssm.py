@@ -47,10 +47,11 @@ if __name__ == '__main__':
     kf = KFold(n_splits=15, shuffle=True)
 
     for k, (train_index, val_index) in enumerate(kf.split(range(len(dataset)))):
-        print('Start train {} ford'.format(k))
 
         train = dataset.iloc[train_index]
         val = dataset.iloc[val_index]
+
+        print('Start train {} ford {}'.format(k, len(train)))
 
         train_base = DSSMCharDataset(train, vacab)
         # train = DataLoader(train, batch_size=256, shuffle=True)
@@ -107,7 +108,6 @@ if __name__ == '__main__':
                     print('val_loss,best_los,{},{}'.format(loss_val, best_loss))
 
                     if best_loss > loss_val:
-                        print('k ford and nums best val ,{} ,{}'.format(k, n_))
                         best_loss = loss_val
                         saveModel(model, BASE_DATA_PATH + '/best_model_{}_ford.pt'.format(k))
                         print('Best val loss {} ,{},{}'.format(best_loss, k, time.asctime()))

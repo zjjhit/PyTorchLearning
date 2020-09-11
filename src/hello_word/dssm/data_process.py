@@ -65,7 +65,7 @@ class DSSMCharDataset(Dataset):
 
             if self.model == 'train':
                 label_ = item['label']
-                output['label_'] = np.long(label_)  # torch.tensor(label_)
+                output['label_'] = torch.tensor(np.long(label_))  # torch.tensor(label_)
 
             self.DataDict[i] = output
 
