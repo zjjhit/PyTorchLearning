@@ -58,13 +58,14 @@ class DSSMCharDataset(Dataset):
             doc_ids = doc_ids + [0] * (self.max_len - len(doc_ids))
 
             output = {
+                'origin_': item['origin'],
                 'query_': torch.tensor(query_ids),
                 'doc_': torch.tensor(doc_ids)
             }
 
             if self.model == 'train':
                 label_ = item['label']
-                output['label_'] = np.float32(label_)  # torch.tensor(label_)
+                output['label_'] = np.long(label_)  # torch.tensor(label_)
 
             self.DataDict[i] = output
 

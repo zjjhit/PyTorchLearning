@@ -23,26 +23,28 @@ def saveModel(model, file_path):
     # self.model.to(self.device)
 
 
-BASE_DATA_PATH = './data/'
+BASE_DATA_PATH = '../data/'
+import os
 
 if __name__ == '__main__':
 
-    dataset = pd.read_csv(BASE_DATA_PATH + '/processed_train.csv')
-    print('begin0')
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    dataset = pd.read_csv(BASE_DATA_PATH + '/train.csv')  # processed_train.csv
     config = BertConfig.from_pretrained(BASE_DATA_PATH + '/config.json')
-    print('begin1')
+    os.environ["CUDA_VISIBLE_DEVICES"] = config.gpu
+    nums_ = config.nums  ## 15
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     vacab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
 
-    criterion = torch.nn.BCEWithLogitsLoss().to(device)
+    if config.loss == 'bce':
+        criterion = torch.nn.BCEWithLogitsLoss().to(device)  ###需要调整 网罗结构
+    else:
+        criterion = torch.nn.CrossEntropyLoss().to(device)
 
     print('begin')
 
-    # for e in range(100):
-    #     print('epoch %d', e)
-
-    kf = KFold(n_splits=10, shuffle=True)
-    nums_ = 50
+    kf = KFold(n_splits=15, shuffle=True)
 
     for k, (train_index, val_index) in enumerate(kf.split(range(len(dataset)))):
         print('Start train {} ford'.format(k))
@@ -69,36 +71,45 @@ if __name__ == '__main__':
             data_loader = tqdm.tqdm(enumerate(train),
                                     total=len(train))
             for i, data_set in data_loader:
-                data = {key: value.to(device) for key, value in data_set.items()}
+                data = {key: value.to(device) for key, value in data_set.items() if key != 'origin_'}
                 # print(data['query_'])
 
                 y_pred = model(data)
                 b_, _ = y_pred.shape
 
-                loss = criterion(y_pred.view(b_, -1), data['label_'].view(b_, -1))
+                if config.loss == 'bce':
+                    loss = criterion(y_pred.view(b_, -1), data['label_'].view(b_, -1))
+                else:
+                    loss = criterion(y_pred.view(b_, -1), data['label_'])
 
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
 
-        with torch.no_grad():
-            # model.eval()
-            data_loader = tqdm.tqdm(enumerate(val),
-                                    total=len(val))
-            loss_val = 0
-            for i, data_set in data_loader:
-                data = {key: value.to(device) for key, value in data_set.items()}
-                y_pred = model(data)
-                b_, _ = y_pred.shape
+            if i % 5 == 0:
+                with torch.no_grad():
+                    # model.eval()
+                    data_loader = tqdm.tqdm(enumerate(val),
+                                            total=len(val))
+                    loss_val = 0
+                    for i, data_set in data_loader:
+                        data = {key: value.to(device) for key, value in data_set.items() if key != 'origin_'}
+                        y_pred = model(data)
+                        b_, _ = y_pred.shape
 
-                loss_val += criterion(y_pred.view(b_, -1), data['label_'].view(b_, -1))
+                        if config.loss == 'bce':
+                            loss = criterion(y_pred.view(b_, -1), data['label_'].view(b_, -1))
+                        else:
+                            loss = criterion(y_pred.view(b_, -1), data['label_'])
 
-            if best_loss > loss_val:
-                best_loss = loss_val
-                saveModel(model, BASE_DATA_PATH + '/best_model_{}ford.pt'.format(k))
-                print('Best val loss {} ,{},{}'.format(best_loss, k, time.asctime()))
+                        loss_val += loss.item()
 
-                # model.to(device)
+                    if best_loss > loss_val:
+                        best_loss = loss_val
+                        saveModel(model, BASE_DATA_PATH + '/best_model_{}_ford.pt'.format(k))
+                        print('Best val loss {} ,{},{}'.format(best_loss, k, time.asctime()))
+
+                    # model.to(device)
 
         # trainer.load('best_model_{}ford.pt'.format(k))
         # for i in trainer.inference(val):

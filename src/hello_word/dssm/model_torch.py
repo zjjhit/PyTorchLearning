@@ -43,7 +43,10 @@ class DSSMOne(nn.Module):
         self.doc_conv = nn.Conv1d(self.hidden_size, self.kernel_out, self.kernel_size)
         self.doc_sem = nn.Linear(self.kernel_out, self.latent_out)
         # learning gamma
-        self.learn_gamma = nn.Conv1d(self.latent_out * 2, 1, 1)
+        if config.loss == 'bce':
+            self.learn_gamma = nn.Conv1d(self.latent_out * 2, 1, 1)
+        else:
+            self.learn_gamma = nn.Conv1d(self.latent_out * 2, 2, 1)
 
     def forward(self, data):
         # data_loader = tqdm.tqdm(enumerate(data_set),
