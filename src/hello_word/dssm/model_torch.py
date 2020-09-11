@@ -28,7 +28,7 @@ class DSSMOne(nn.Module):
         self.device = device
         ###此部分的信息有待处理
         self.embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
-        self.embeddings.to(self.device)  ###????
+        # self.embeddings.to(self.device)  ###????
 
         self.latent_out = config.latent_out_1
         self.hidden_size = config.hidden_size
@@ -56,22 +56,23 @@ class DSSMOne(nn.Module):
         ## Batch*Len*Dim --> Batch*Dim* Len
         # data = {key: value.to(self.device).transpose(1, 2) for key, value in data.items()}
         # data = {key: value.to(self.device) for key, value in data_set.items()}
+        print(data['query_'].shape)
         q, d = self.embeddings(data['query_']).transpose(1, 2), self.embeddings(data['doc_']).transpose(1, 2)  ###待匹配的两个句子
-
+        print(q.shape)
         ### query
-        q_c = F.tanh(self.query_conv(q))
+        q_c = F.relu(self.query_conv(q))
         q_k = kmax_pooling(q_c, 2, self.kmax)
         q_k = q_k.transpose(1, 2)
-        q_s = F.tanh(self.query_sem(q_k))
+        q_s = F.relu(self.query_sem(q_k))
         # q_s = q_s.resize(self.latent_out)
         b_, k_, l_ = q_s.size()
         q_s = q_s.contiguous().view((b_, k_ * l_))
 
         ###doc
-        d_c = F.tanh(self.doc_conv(d))
+        d_c = F.relu(self.doc_conv(d))
         d_k = kmax_pooling(d_c, 2, self.kmax)
         d_k = d_k.transpose(1, 2)
-        d_s = F.tanh(self.doc_sem(d_k))
+        d_s = F.relu(self.doc_sem(d_k))
         # d_s = d_s.resize(self.latent_out)
         d_s = d_s.contiguous().view((b_, k_ * l_))
 

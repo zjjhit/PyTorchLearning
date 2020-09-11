@@ -35,7 +35,7 @@ def test():
     data = DataLoader(data_base, batch_size=16)
 
     # model = DSSMOne(config, device)
-    model = torch.load(BASE_DATA_PATH + '/best_model_1ford.pt').to(device)
+    model = torch.load(BASE_DATA_PATH + '/best_model_0_ford.pt').to(device)
 
     with torch.no_grad():
         # model.eval()
@@ -51,12 +51,12 @@ def test():
             label_ = data_['label_'].unsqueeze(1)
             # query_ = data_['query_'].unsqueeze(1)
             # doc_ = data_['doc_'].unsqueeze(1)
-            tmp_ = torch.cat((y_pred, label_), dim=1)
+            print(y_pred)
+            k_ = torch.max(y_pred, 1)[1].unsqueeze(1)
+            tmp_ = torch.cat((k_, label_), dim=1)
 
             print(tmp_)
             print(org_)
-
-
 
 
 if __name__ == '__main__':
