@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-BASE_DATA_PATH = './data/'
+BASE_DATA_PATH = '../data/'
 
 
 class DSSMCharDataset(Dataset):
@@ -12,7 +12,7 @@ class DSSMCharDataset(Dataset):
     基于字符的 数据集合
     """
 
-    def __init__(self, dataset, vocab, max_len=256, model='train'):
+    def __init__(self, dataset, vocab, max_len=128, model='train'):
         self.dataset = dataset
         self.max_len = max_len
         self.data_size = len(dataset)
