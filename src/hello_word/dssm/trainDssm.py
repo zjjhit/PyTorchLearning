@@ -66,7 +66,7 @@ if __name__ == '__main__':
 
         for n_ in range(nums_):
             print('k ford and nums ,{} ,{}'.format(k, n_))
-            train = DataLoader(train_base, batch_size=256, shuffle=True)
+            train = DataLoader(train_base, batch_size=64, shuffle=True)
 
             data_loader = tqdm.tqdm(enumerate(train),
                                     total=len(train))

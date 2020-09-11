@@ -56,9 +56,9 @@ class DSSMOne(nn.Module):
         ## Batch*Len*Dim --> Batch*Dim* Len
         # data = {key: value.to(self.device).transpose(1, 2) for key, value in data.items()}
         # data = {key: value.to(self.device) for key, value in data_set.items()}
-        print(data['query_'].shape)
+        # print(data['query_'].shape)
         q, d = self.embeddings(data['query_']).transpose(1, 2), self.embeddings(data['doc_']).transpose(1, 2)  ###待匹配的两个句子
-        print(q.shape)
+        # print(q.shape)
         ### query
         q_c = F.relu(self.query_conv(q))
         q_k = kmax_pooling(q_c, 2, self.kmax)
