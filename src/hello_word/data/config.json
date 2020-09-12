@@ -5,5 +5,8 @@
   "kernel_out_1": 128,
   "kernel_size": 1,
   "kmax": 1,
-  "vocab_size": 89
+  "vocab_size": 89,
+  "nums": 15,
+  "loss": "cross",
+  "gpu": "1"
 }

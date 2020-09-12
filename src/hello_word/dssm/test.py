@@ -61,5 +61,28 @@ def test():
             print(acc_.item(), b_, float(acc_.item()) / b_)
 
 
+def kmax_pooling(x, dim, k):
+    index = x.topk(k, dim=dim)[1].sort(dim=dim)[0]
+    return x.gather(dim, index)
+
+
+import pandas as pd
+
+BASE_DATA_PATH = '../data/'
+
+
+def makeTnmp():
+    dataset = pd.read_csv('../data/processed_train.csv')  # processed_train.csv
+    # train = random.sample(dataset, 50000)
+    # test = random.sample(dataset, 100)
+
+    df = pd.DataFrame(columns=['origin', 'label'], data=dataset.take(range(1, 50000)))
+    df.to_csv(BASE_DATA_PATH + '/train.csv', index=False)
+    df = pd.DataFrame(columns=['origin', 'label'], data=dataset.take(range(60000, 60100)))
+    df.to_csv(BASE_DATA_PATH + '/test.csv', index=False)
+
+
 if __name__ == '__main__':
-    test()
+    # test()
+    pass
+    makeTnmp()

@@ -57,7 +57,8 @@ class DSSMOne(nn.Module):
         # data = {key: value.to(self.device).transpose(1, 2) for key, value in data.items()}
         # data = {key: value.to(self.device) for key, value in data_set.items()}
         # print(data['query_'].shape)
-        q, d = self.embeddings(data['query_']).transpose(1, 2), self.embeddings(data['doc_']).transpose(1, 2)  ###待匹配的两个句子
+        q, d = self.embeddings(data['query_']).permute(0, 2, 1), self.embeddings(data['doc_']).permute(0, 2,
+                                                                                                       1)  ###待匹配的两个句子
         # print(q.shape)
         ### query
         q_c = F.relu(self.query_conv(q))
@@ -80,7 +81,7 @@ class DSSMOne(nn.Module):
         out_ = torch.cat((q_s, d_s), 1)
         out_ = out_.unsqueeze(2)
 
-        with_gamma = self.learn_gamma(out_)  ### --> B * 2 * 1
+        with_gamma = F.tanh(self.learn_gamma(out_))  ### --> B * 2 * 1
         with_gamma = with_gamma.contiguous().view(b_, -1)
         return with_gamma
 
