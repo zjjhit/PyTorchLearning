@@ -82,7 +82,18 @@ def makeTnmp():
     df.to_csv(BASE_DATA_PATH + '/test.csv', index=False)
 
 
+def testVocab():
+    dic_ ={}
+    fout = open(BASE_DATA_PATH + '/' + 'char2id.vocab', 'rb')
+
+    dic_ = pickle.load( fout)
+    fout.close()
+
+    for k in dic_:
+        print(k,dic_[k])
+
+
+
 if __name__ == '__main__':
     # test()
-    pass
-    makeTnmp()
+    testVocab()

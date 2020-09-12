@@ -92,6 +92,61 @@ class DSSMOne(nn.Module):
     #     pass
 
 
+class DSSMTwo(nn.Module):
+
+    def __init__(self, config, device='cpu'):
+        super(DSSMOne, self).__init__()
+
+        self.device = device
+        ###此部分的信息有待处理
+        self.embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
+        # self.embeddings.to(self.device)  ###????
+
+        self.latent_out = config.latent_out_1
+        self.hidden_size = config.hidden_size
+        self.kernel_out = config.kernel_out_1
+        self.kernel_size = config.kernel_size
+        self.max_len = config.max_len
+        self.kmax = config.kmax
+
+        # layers for query
+        self.query_conv = nn.Conv1d(self.hidden_size, self.kernel_out, self.kernel_size)
+        self.query_sem = nn.Linear(self.max_len, self.latent_out)  ## config.latent_out_1  需要输出的语义维度中间
+        # layers for docs
+        self.doc_conv = nn.Conv1d(self.hidden_size, self.kernel_out, self.kernel_size)
+        self.doc_sem = nn.Linear(self.max_len, self.latent_out)
+        # learning gamma
+        if config.loss == 'bce':
+            self.learn_gamma = nn.Conv1d(self.latent_out * 2, 1, 1)
+        else:
+            self.learn_gamma = nn.Linear(self.latent_out * 2, 2)
+
+    def forward(self, data):
+
+        q, d = self.embeddings(data['query_']).permute(0, 2, 1), self.embeddings(data['doc_']).permute(0, 2,
+                                                                                                       1)  ###待匹配的两个句子
+        # print(q.shape)
+        ### query
+        q_c = F.relu(self.query_conv(q))
+        q_k = kmax_pooling(q_c, 1, self.kmax)  ## B 1 L
+        q_s = F.relu(self.query_sem(q_k))
+        b_, k_, l_ = q_s.size()
+        q_s = q_s.contiguous().view((b_, -1))
+
+        ###doc
+        d_c = F.relu(self.doc_conv(d))
+        d_k = kmax_pooling(d_c, 2, self.kmax)
+        d_s = F.relu(self.doc_sem(d_k))
+        d_s = d_s.contiguous().view((b_, -1))
+
+        ###双塔结构向量拼接
+        out_ = torch.cat((q_s, d_s), 1)
+        out_ = out_.unsqueeze(2)
+
+        with_gamma = self.learn_gamma(out_)  ### --> B * 2 * 1
+        return with_gamma
+
+
 def test():
     # Build a random data set.
     import numpy as np

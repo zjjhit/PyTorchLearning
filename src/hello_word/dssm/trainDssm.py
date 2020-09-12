@@ -32,9 +32,7 @@ if __name__ == '__main__':
     config = BertConfig.from_pretrained(BASE_DATA_PATH + '/config.json')
     os.environ["CUDA_VISIBLE_DEVICES"] = config.gpu
     nums_ = config.nums  ## 15
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     vacab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
 
     if config.loss == 'bce':
@@ -54,26 +52,22 @@ if __name__ == '__main__':
         print('Start train {} ford {}'.format(k, len(train)))
 
         train_base = DSSMCharDataset(train, vacab)
-        # train = DataLoader(train, batch_size=256, shuffle=True)
         val = DSSMCharDataset(val, vacab)
-        val = DataLoader(val, batch_size=256, num_workers=2)
+        val = DataLoader(val, batch_size=config.batch_size, num_workers=2)
 
         model = DSSMOne(config, device).to(device)
         optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
 
         best_loss = 100000
-
         model.train()
-
         for n_ in range(nums_):
             print('k ford and nums ,{} ,{}'.format(k, n_))
-            train = DataLoader(train_base, batch_size=64, shuffle=True)
+            train = DataLoader(train_base, batch_size=config.batch_size, shuffle=True)
 
             data_loader = tqdm.tqdm(enumerate(train),
                                     total=len(train))
             for i, data_set in data_loader:
                 data = {key: value.to(device) for key, value in data_set.items() if key != 'origin_'}
-                # print(data['query_'])
 
                 y_pred = model(data)
                 b_, _ = y_pred.shape
@@ -89,7 +83,6 @@ if __name__ == '__main__':
 
             if n_ % 5 == 0:
                 with torch.no_grad():
-                    # model.eval()
                     data_loader = tqdm.tqdm(enumerate(val),
                                             total=len(val))
                     loss_val = 0
@@ -97,24 +90,14 @@ if __name__ == '__main__':
                         data = {key: value.to(device) for key, value in data_set.items() if key != 'origin_'}
                         y_pred = model(data)
                         b_, _ = y_pred.shape
-
                         if config.loss == 'bce':
                             a = criterion(y_pred.view(b_, -1), data['label_'].view(b_, -1))
                         else:
                             a = criterion(y_pred.view(b_, -1), data['label_'])
-
                         loss_val += a.item()
 
                     print('val_loss,best_los,{},{}'.format(loss_val, best_loss))
-
                     if best_loss > loss_val:
                         best_loss = loss_val
                         saveModel(model, BASE_DATA_PATH + '/best_model_{}_ford.pt'.format(k))
                         print('Best val loss {} ,{},{}'.format(best_loss, k, time.asctime()))
-
-                    # model.to(device)
-
-        # trainer.load('best_model_{}ford.pt'.format(k))
-        # for i in trainer.inference(val):
-        #     print(i)
-        #     print('\n')
