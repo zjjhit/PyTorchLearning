@@ -25,8 +25,13 @@ def saveModel(model, file_path):
 
 BASE_DATA_PATH = '../data/'
 import os
+import sys
 
 if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        config_path = sys.argv[1]
+    else:
+        config_path = BASE_DATA_PATH + '/config.json'
 
     dataset = pd.read_csv(BASE_DATA_PATH + '/train.csv')  # processed_train.csv
     config = BertConfig.from_pretrained(BASE_DATA_PATH + '/config.json')
@@ -55,7 +60,16 @@ if __name__ == '__main__':
         val = DSSMCharDataset(val, vacab)
         val = DataLoader(val, batch_size=config.batch_size, num_workers=2)
 
-        model = DSSMOne(config, device).to(device)
+        if config.id == 1:
+            model = DSSMOne(config, device).to(device)
+            print('model_1')
+        elif config.id == 2:
+            model = DSSMTwo(config, device).to(device)
+            print('model_2')
+        else:
+            model = DSSMThree(config, device).to(device)
+            print('model_3')
+
         optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
 
         best_loss = 100000
@@ -99,5 +113,5 @@ if __name__ == '__main__':
                     print('val_loss,best_los,{},{}'.format(loss_val, best_loss))
                     if best_loss > loss_val:
                         best_loss = loss_val
-                        saveModel(model, BASE_DATA_PATH + '/best_model_{}_ford.pt'.format(k))
-                        print('Best val loss {} ,{},{}'.format(best_loss, k, time.asctime()))
+                        saveModel(model, BASE_DATA_PATH + '/best_model_{}_{}_ford.pt'.format(config.id, k))
+                        print('Best val loss {},{},{},{}'.format(best_loss, config.id, k, time.asctime()))

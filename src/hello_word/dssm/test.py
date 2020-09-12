@@ -25,27 +25,21 @@ BASE_DATA_PATH = '../data/'
 def test():
     dataset = pd.read_csv(BASE_DATA_PATH + '/test.csv')
     print('begin0')
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     device = 'cpu'
     vacab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
 
     print('begin')
 
     data_base = DSSMCharDataset(dataset, vacab)
-    data = DataLoader(data_base, batch_size=16)
+    data = DataLoader(data_base, batch_size=50)
 
     # model = DSSMOne(config, device)
-    model = torch.load(BASE_DATA_PATH + '/best_model_0_ford.pt').to(device)
+    model = torch.load(BASE_DATA_PATH + '/best_model_3_0_ford.pt').to(device)
 
     with torch.no_grad():
-        # model.eval()
-        # data_loader = tqdm.tqdm(enumerate(data),
-        #                         total=len(data))
         for i, data_ in enumerate(data):
-            # data_ = {key: value.to(device) for key, value in data_set.items()}
             y_pred = model(data_)
             b_, _ = y_pred.shape
-            # print(data_['label_'].shape)
 
             org_ = data_['origin_']
             label_ = data_['label_']
@@ -55,7 +49,7 @@ def test():
             k_ = torch.max(y_pred, 1)[1]
             tmp_ = torch.stack((k_, label_), dim=0)
 
-            print(tmp_)
+            # print(tmp_)
             acc_ = sum(k_ == label_)
             # print(org_)
             print(acc_.item(), b_, float(acc_.item()) / b_)
@@ -95,5 +89,5 @@ def testVocab():
 
 
 if __name__ == '__main__':
-    # test()
-    testVocab()
+    test()
+    # testVocab()

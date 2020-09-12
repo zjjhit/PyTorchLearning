@@ -85,17 +85,11 @@ class DSSMOne(nn.Module):
         with_gamma = with_gamma.contiguous().view(b_, -1)
         return with_gamma
 
-    # def train(self, data):
-    #
-    #
-    # def evaluate(self, data):
-    #     pass
-
 
 class DSSMTwo(nn.Module):
 
     def __init__(self, config, device='cpu'):
-        super(DSSMOne, self).__init__()
+        super(DSSMTwo, self).__init__()
 
         self.device = device
         ###此部分的信息有待处理
@@ -144,6 +138,52 @@ class DSSMTwo(nn.Module):
         out_ = out_.unsqueeze(2)
 
         with_gamma = self.learn_gamma(out_)  ### --> B * 2 * 1
+        return with_gamma
+
+
+class DSSMThree(nn.Module):
+
+    def __init__(self, config, device='cpu'):
+        super(DSSMThree, self).__init__()
+
+        self.device = device
+        ###此部分的信息有待处理
+        self.embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
+        # self.embeddings.to(self.device)  ###????
+
+        self.latent_out = config.latent_out_1
+        self.hidden_size = config.hidden_size
+        self.kernel_out = config.kernel_out_1
+        self.kernel_size = config.kernel_size
+        self.max_len = config.max_len
+        self.kmax = config.kmax
+
+        self.query_sem = nn.Linear(self.max_len * self.hidden_size,
+                                   self.latent_out)  ## config.latent_out_1  需要输出的语义维度中间
+        # layers for docs
+        self.doc_sem = nn.Linear(self.max_len * self.hidden_size, self.latent_out)
+        # learning gamma
+        self.learn_gamma = nn.Linear(self.latent_out * 2, 2)
+
+    def forward(self, data):
+        q = self.embeddings(data['query_'])
+        d = self.embeddings(data['doc_'])
+
+        b_, l_, d_ = q.shape
+        q = q.view(b_, -1)
+        d = d.view(b_, -1)
+
+        # print(q.shape)
+        ### query
+        q_s = F.relu(self.query_sem(q))
+
+        ###doc
+        d_s = F.relu(self.doc_sem(d))
+
+        ###双塔结构向量拼接
+        out_ = torch.cat((q_s, d_s), 1)
+
+        with_gamma = self.learn_gamma(out_)  ### --> B * 2
         return with_gamma
 
 
