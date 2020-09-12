@@ -129,7 +129,7 @@ class DSSMTwo(nn.Module):
 
         ###doc
         d_c = F.relu(self.doc_conv(d))
-        d_k = kmax_pooling(d_c, 2, self.kmax)
+        d_k = kmax_pooling(d_c, 1, self.kmax)
         d_s = F.relu(self.doc_sem(d_k))
         d_s = d_s.contiguous().view((b_, -1))
 

@@ -33,7 +33,7 @@ if __name__ == '__main__':
     else:
         config_path = BASE_DATA_PATH + '/config.json'
 
-    dataset = pd.read_csv(BASE_DATA_PATH + '/train.csv')  # processed_train.csv
+    dataset = pd.read_csv(BASE_DATA_PATH + '/test.csv')  # processed_train.csv
     config = BertConfig.from_pretrained(BASE_DATA_PATH + '/config.json')
     os.environ["CUDA_VISIBLE_DEVICES"] = config.gpu
     nums_ = config.nums  ## 15
