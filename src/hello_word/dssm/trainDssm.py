@@ -23,7 +23,7 @@ def saveModel(model, file_path):
     # self.model.to(self.device)
 
 
-BASE_DATA_PATH = '../data/'
+BASE_DATA_PATH = './data/'
 import os
 import sys
 
@@ -34,7 +34,7 @@ if __name__ == '__main__':
         config_path = BASE_DATA_PATH + '/config.json'
 
     dataset = pd.read_csv(BASE_DATA_PATH + '/train.csv')  # processed_train.csv
-    config = BertConfig.from_pretrained(BASE_DATA_PATH + '/config.json')
+    config = BertConfig.from_pretrained(config_path)
     os.environ["CUDA_VISIBLE_DEVICES"] = config.gpu
     nums_ = config.nums  ## 15
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -84,6 +84,7 @@ if __name__ == '__main__':
                 data = {key: value.to(device) for key, value in data_set.items() if key != 'origin_'}
 
                 y_pred = model(data)
+                # print(y_pred.shape,data['label_'].shape)
                 b_, _ = y_pred.shape
 
                 if config.loss == 'bce':
@@ -95,7 +96,7 @@ if __name__ == '__main__':
                 loss.backward()
                 optimizer.step()
 
-            if n_ % 5 == 0:
+            if n_ % 10 == 0:
                 with torch.no_grad():
                     data_loader = tqdm.tqdm(enumerate(val),
                                             total=len(val))
@@ -113,5 +114,5 @@ if __name__ == '__main__':
                     print('val_loss,best_los,{},{}'.format(loss_val, best_loss))
                     if best_loss > loss_val:
                         best_loss = loss_val
-                        saveModel(model, BASE_DATA_PATH + '/best_model_{}_{}_ford.pt'.format(config.id, k))
+                        saveModel(model, BASE_DATA_PATH + '/model/best_model_{}_{}_ford.pt'.format(config.id, k))
                         print('Best val loss {},{},{},{}'.format(best_loss, config.id, k, time.asctime()))
