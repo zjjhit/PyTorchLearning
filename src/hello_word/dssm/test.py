@@ -69,8 +69,8 @@ BASE_DATA_PATH = '../data/'
 
 
 if __name__ == '__main__':
-    # test()
+    test()
     # testVocab()
-    a = torch.randn(2,3,4)
+    a = torch.randn(3,3,4)
     b=kmax_pooling(a,1,1)
     print(b.shape)

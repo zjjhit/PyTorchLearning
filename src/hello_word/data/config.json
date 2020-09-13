@@ -9,8 +9,8 @@
   "kernel_size": 1,
   "kmax": 1,
   "vocab_size": 89,
-  "nums": 50,
+  "nums": 10,
   "loss": "cross",
   "gpu": "1",
-  "id": 3
+  "id": 4
 }

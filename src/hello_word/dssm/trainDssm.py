@@ -66,9 +66,12 @@ if __name__ == '__main__':
         elif config.id == 2:
             model = DSSMTwo(config, device).to(device)
             print('model_2')
-        else:
+        elif config.id == 3:
             model = DSSMThree(config, device).to(device)
             print('model_3')
+        else:
+            model = DSSMFour(config, device).to(device)
+            print('model_4')
 
         optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
 
