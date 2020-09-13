@@ -146,13 +146,10 @@ class DSSMFour(nn.Module):
     """
 
     def __init__(self, config, device='cpu'):
-        super(DSSMTwo, self).__init__()
+        super(DSSMFour, self).__init__()
 
         self.device = device
         # 此部分的信息有待处理
-        self.embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
-        # self.embeddings.to(self.device)  ###????
-
         self.latent_out = config.latent_out_1
         self.hidden_size = config.hidden_size
         self.kernel_out = config.kernel_out_1
@@ -160,6 +157,7 @@ class DSSMFour(nn.Module):
         self.max_len = config.max_len
         self.kmax = config.kmax
 
+        self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size)
         # layers for query
         self.query_conv = nn.Conv1d(self.hidden_size, self.kernel_out, self.kernel_size)
         self.query_sem = nn.Linear(self.max_len, self.latent_out)  ## config.latent_out_1  需要输出的语义维度中间
@@ -201,7 +199,7 @@ class DSSMThree(nn.Module):
 
         self.device = device
         ###此部分的信息有待处理
-        self.embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
+
         # self.embeddings.to(self.device)  ###????
 
         self.latent_out = config.latent_out_1
@@ -210,7 +208,7 @@ class DSSMThree(nn.Module):
         self.kernel_size = config.kernel_size
         self.max_len = config.max_len
         self.kmax = config.kmax
-
+        self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size)
         self.query_sem = nn.Linear(self.max_len * self.hidden_size,
                                    self.latent_out)  ## config.latent_out_1  需要输出的语义维度中间
         # layers for docs
@@ -240,49 +238,25 @@ class DSSMThree(nn.Module):
         return with_gamma
 
 
-def test():
-    # Build a random data set.
-    import numpy as np
-    from torch.autograd import Variable
-    from transformers import BertConfig
+class DSSMFive(DSSMFour):
+    def __init__(self, config, device='cpu', vocab=None):
+        # super(DSSMFive, self).__init__()
+        DSSMFour.__init__(self, config, device)
 
-    config = BertConfig.from_pretrained('./config.json')
-    sample_size = 10
-    l_Qs = []
-    pos_l_Ds = []
+        self.vocab = vocab
+        self.hidden_size = 7
+        self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size)
+        self.query_conv = nn.Conv1d(self.hidden_size, self.kernel_out, self.kernel_size)
+        tmp_ = self.__toBcode__()
+        self.embeddings.weight.data.copy_(tmp_)
+        self.embeddings.weight.requires_grad = False
 
-    for i in range(sample_size):
-        query_len = np.random.randint(1, 10)
-        l_Q = np.random.rand(5, query_len, config.hidden_size)
-        l_Qs.append(l_Q)
+    def __toBcode__(self):
+        t_ = []
+        for char_ in self.vocab:
+            b_ = bin(int(self.vocab[char_]))[2:]
+            p_ = [int(k) for k in '0' * (7 - len(b_)) + b_]
+            t_.append(p_)
+        return torch.tensor(t_)
 
-        doc_len = np.random.randint(50, 500)
-        l_D = np.random.rand(5, doc_len, config.hidden_size)
-        pos_l_Ds.append(l_D)
 
-    # Till now, we have made a complete numpy dataset
-    # Now let's convert the numpy variables to torch Variable
-
-    for i in range(len(l_Qs)):
-        l_Qs[i] = Variable(torch.from_numpy(l_Qs[i]).float())
-        pos_l_Ds[i] = Variable(torch.from_numpy(pos_l_Ds[i]).float())
-
-    model = DSSMOne(config)
-
-    # Loss and optimizer
-    criterion = torch.nn.BCEWithLogitsLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
-
-    # output variable, remember the cosine similarity with positive doc was at 0th index
-    y = torch.randn(10, 5)
-    y = (y > 0).int().float()
-
-    for i in range(sample_size):
-        y_pred = model({'query_': l_Qs[i], 'doc_': pos_l_Ds[i]})
-
-        b_, _ = y_pred.shape
-        print(i, y_pred.shape, y_pred.view(b_, -1).shape)
-        loss = criterion(y_pred.view(b_, -1), y[i].view(b_, -1))
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
