@@ -146,13 +146,10 @@ class DSSMFour(nn.Module):
     """
 
     def __init__(self, config, device='cpu'):
-        super(DSSMTwo, self).__init__()
+        super(DSSMFour, self).__init__()
 
         self.device = device
         # 此部分的信息有待处理
-        self.embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
-        # self.embeddings.to(self.device)  ###????
-
         self.latent_out = config.latent_out_1
         self.hidden_size = config.hidden_size
         self.kernel_out = config.kernel_out_1
@@ -160,6 +157,7 @@ class DSSMFour(nn.Module):
         self.max_len = config.max_len
         self.kmax = config.kmax
 
+        self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size)
         # layers for query
         self.query_conv = nn.Conv1d(self.hidden_size, self.kernel_out, self.kernel_size)
         self.query_sem = nn.Linear(self.max_len, self.latent_out)  ## config.latent_out_1  需要输出的语义维度中间
@@ -172,8 +170,8 @@ class DSSMFour(nn.Module):
     def forward(self, data):
 
         q, d = self.embeddings(data['query_']).permute(0, 2, 1), self.embeddings(data['doc_']).permute(0, 2,
-                                                                                                       1)  #待匹配的两个句子
-        #query
+                                                                                                       1)  # 待匹配的两个句子
+        # query
         q_c = F.relu(self.query_conv(q))
         q_k = kmax_pooling(q_c, 1, self.kmax)  ## B 1 L
         q_s = F.relu(self.query_sem(q_k))
@@ -201,7 +199,7 @@ class DSSMThree(nn.Module):
 
         self.device = device
         ###此部分的信息有待处理
-        self.embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
+
         # self.embeddings.to(self.device)  ###????
 
         self.latent_out = config.latent_out_1
@@ -210,7 +208,7 @@ class DSSMThree(nn.Module):
         self.kernel_size = config.kernel_size
         self.max_len = config.max_len
         self.kmax = config.kmax
-
+        self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size)
         self.query_sem = nn.Linear(self.max_len * self.hidden_size,
                                    self.latent_out)  ## config.latent_out_1  需要输出的语义维度中间
         # layers for docs
@@ -238,6 +236,28 @@ class DSSMThree(nn.Module):
 
         with_gamma = self.learn_gamma(out_)  ### --> B * 2
         return with_gamma
+
+
+class DSSMFive(DSSMFour):
+    def __init__(self, config, device='cpu', vocab=None):
+        # super(DSSMFive, self).__init__()
+        DSSMFour.__init__(self, config, device)
+
+        self.vocab = vocab
+        self.hidden_size = 7
+        self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size)
+        self.query_conv = nn.Conv1d(self.hidden_size, self.kernel_out, self.kernel_size)
+        tmp_ = self.__toBcode__()
+        self.embeddings.weight.data.copy_(tmp_)
+        self.embeddings.weight.requires_grad = False
+
+    def __toBcode__(self):
+        t_ = []
+        for char_ in self.vocab:
+            b_ = bin(int(self.vocab[char_]))[2:]
+            p_ = [int(k) for k in '0' * (7 - len(b_)) + b_]
+            t_.append(p_)
+        return torch.tensor(t_)
 
 
 def test():
