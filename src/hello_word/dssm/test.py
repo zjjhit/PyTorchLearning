@@ -67,7 +67,7 @@ from transformers import BertConfig
 
 if __name__ == '__main__':
     pass
-    # test()
+    test()
     # testVocab()
 
     vocab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
