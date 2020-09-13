@@ -78,7 +78,7 @@ if __name__ == '__main__':
             print('model_4')
         elif config.id == 5:
             model = DSSMFive(config, device, vocab).to(device)
-            print('model_4')
+            print('model_5')
 
         optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
 
