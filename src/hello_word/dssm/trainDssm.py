@@ -33,12 +33,14 @@ if __name__ == '__main__':
     else:
         config_path = BASE_DATA_PATH + '/config.json'
 
-    dataset = pd.read_csv(BASE_DATA_PATH + '/test.csv')  # processed_train.csv
     config = BertConfig.from_pretrained(BASE_DATA_PATH + '/config.json')
+
+    dataset = pd.read_csv(BASE_DATA_PATH + '/train.csv')  # processed_train.csv
+
     os.environ["CUDA_VISIBLE_DEVICES"] = config.gpu
     nums_ = config.nums  ## 15
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    vacab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
+    vocab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
 
     if config.loss == 'bce':
         criterion = torch.nn.BCEWithLogitsLoss().to(device)  ###需要调整 网罗结构
@@ -50,14 +52,16 @@ if __name__ == '__main__':
     kf = KFold(n_splits=15, shuffle=True)
 
     for k, (train_index, val_index) in enumerate(kf.split(range(len(dataset)))):
+        if k == 2:
+            break
 
         train = dataset.iloc[train_index]
         val = dataset.iloc[val_index]
 
         print('Start train {} ford {}'.format(k, len(train)))
 
-        train_base = DSSMCharDataset(train, vacab)
-        val = DSSMCharDataset(val, vacab)
+        train_base = DSSMCharDataset(train, vocab)
+        val = DSSMCharDataset(val, vocab)
         val = DataLoader(val, batch_size=config.batch_size, num_workers=2)
 
         if config.id == 1:
@@ -69,9 +73,12 @@ if __name__ == '__main__':
         elif config.id == 3:
             model = DSSMThree(config, device).to(device)
             print('model_3')
-        else:
+        elif config.id == 4:
             model = DSSMFour(config, device).to(device)
             print('model_4')
+        elif config.id == 5:
+            model = DSSMFive(config, device, vocab).to(device)
+            print('model_5')
 
         optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
 
