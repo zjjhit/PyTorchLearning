@@ -1,16 +1,14 @@
 {
   "batch_size": 64,
   "hidden_size": 16,
-
   "max_len": 128,
   "latent_out_1": 128,
   "kernel_out_1": 128,
-
   "kernel_size": 1,
   "kmax": 1,
   "vocab_size": 89,
-  "nums": 50,
+  "nums": 200,
   "loss": "cross",
   "gpu": "1",
-  "id": 3
+  "id": 5
 }

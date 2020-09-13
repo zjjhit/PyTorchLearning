@@ -62,7 +62,7 @@ class DSSMCharDataset(Dataset):
                 'query_': torch.tensor(query_ids),
                 'doc_': torch.tensor(doc_ids)
             }
-
+            # print(type(output['doc_']))
             if self.model == 'train':
                 label_ = item['label']
                 output['label_'] = torch.tensor(np.long(label_))  # torch.tensor(label_)
@@ -105,7 +105,8 @@ def vocab_build(dict_path, min_count=-float("inf")):
 import re
 
 filter_word = set(
-    {'LTD', 'CO.,LTD', 'LIMITED', 'LTD.', 'CO', 'CO.,LTD.', 'CO.LTD', 'COMPANY', 'GROUP', 'INC.', 'CO.LTD.', 'CO.', 'CO.,', 'CO.,',
+    {'LTD', 'CO.,LTD', 'LIMITED', 'LTD.', 'CO', 'CO.,LTD.', 'CO.LTD', 'COMPANY', 'GROUP', 'INC.', 'CO.LTD.', 'CO.',
+     'CO.,', 'CO.,',
      'LIMITED', 'LIMITED.', 'LTD,', 'LTD.,', 'LIMITE', '.,LTD', ',LTD', 'LTD.', 'LLC.', 'CO..LTD.'})
 
 
@@ -241,8 +242,10 @@ def makeTrainNegData(path_data, data_len=500000, type_=0):
         i_ = 0
         while i_ < num_one:
             for word in candidate_words:
-                randn_a = random.sample(word2sen[word], min(int(num_one / len(candidate_words)) + 1, len(word2sen[word])))
-                randn_b = random.sample(word2sen[word], min(int(num_one / len(candidate_words)) + 1, len(word2sen[word])))
+                randn_a = random.sample(word2sen[word],
+                                        min(int(num_one / len(candidate_words)) + 1, len(word2sen[word])))
+                randn_b = random.sample(word2sen[word],
+                                        min(int(num_one / len(candidate_words)) + 1, len(word2sen[word])))
                 for i in range(len(randn_a)):
                     f_ = filterData(data_[randn_a[i]], data_[randn_b[i]])
                     if f_ == 2:
@@ -270,12 +273,15 @@ def makeTrainNegData(path_data, data_len=500000, type_=0):
         i_ = 0
         while i_ < num_two:
             for t_word in candidate_two:
-                randn_a = random.sample(candidate_two[t_word], min(len(candidate_two[t_word]), int(num_two / len(candidate_two)) + 1))
-                randn_b = random.sample(candidate_two[t_word], min(len(candidate_two[t_word]), int(num_two / len(candidate_two)) + 1))
+                randn_a = random.sample(candidate_two[t_word],
+                                        min(len(candidate_two[t_word]), int(num_two / len(candidate_two)) + 1))
+                randn_b = random.sample(candidate_two[t_word],
+                                        min(len(candidate_two[t_word]), int(num_two / len(candidate_two)) + 1))
                 for i in range(len(randn_a)):
                     f_ = filterData(data_[randn_a[i]], data_[randn_b[i]])
                     if f_ == 2:
-                        neg_two.add('\001'.join(t_word) + "\001\001" + data_[randn_a[i]] + '\001\002' + data_[randn_b[i]])
+                        neg_two.add(
+                            '\001'.join(t_word) + "\001\001" + data_[randn_a[i]] + '\001\002' + data_[randn_b[i]])
 
                 i_ = len(neg_two)
 

@@ -34,7 +34,7 @@ def test():
     data = DataLoader(data_base, batch_size=50)
 
     # model = DSSMOne(config, device)
-    model = torch.load(BASE_DATA_PATH + '/best_model_3_0_ford.pt').to(device)
+    model = torch.load(BASE_DATA_PATH + '/best_model_4_14_ford.pt').to(device)
 
     with torch.no_grad():
         for i, data_ in enumerate(data):
@@ -63,31 +63,15 @@ def kmax_pooling(x, dim, k):
 import pandas as pd
 
 BASE_DATA_PATH = '../data/'
-
-
-def makeTnmp():
-    dataset = pd.read_csv('../data/processed_train.csv')  # processed_train.csv
-    # train = random.sample(dataset, 50000)
-    # test = random.sample(dataset, 100)
-
-    df = pd.DataFrame(columns=['origin', 'label'], data=dataset.take(range(1, 50000)))
-    df.to_csv(BASE_DATA_PATH + '/train.csv', index=False)
-    df = pd.DataFrame(columns=['origin', 'label'], data=dataset.take(range(60000, 60100)))
-    df.to_csv(BASE_DATA_PATH + '/test.csv', index=False)
-
-
-def testVocab():
-    dic_ ={}
-    fout = open(BASE_DATA_PATH + '/' + 'char2id.vocab', 'rb')
-
-    dic_ = pickle.load( fout)
-    fout.close()
-
-    for k in dic_:
-        print(k,dic_[k])
-
-
+from transformers import BertConfig
 
 if __name__ == '__main__':
-    test()
+    pass
+    # test()
     # testVocab()
+
+    vocab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
+    config = BertConfig.from_pretrained(BASE_DATA_PATH + '/config.json')
+    five = DSSMFive(config, 'cpu', vocab)
+    e_ = five.embeddings
+    print(e_.weight)
