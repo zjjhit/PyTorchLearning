@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="zjj@127.0.0.1:2215" uploadOnCheckin="be0f1413-b999-4bb1-b2ec-7da03f6ff003" showAutoUploadSettingsWarning="false">
+    <serverData>
+      <paths name="zjj@127.0.0.1:2215">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/zjj/Pycharm/PytorchLearning" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="zjj@127.0.0.1:2216">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/zjj/Pycharm/PytorchLearning" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myUploadOnCheckinName" value="zjj@127.0.0.1:2215" />
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>

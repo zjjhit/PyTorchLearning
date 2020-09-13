@@ -34,7 +34,7 @@ def test():
     data = DataLoader(data_base, batch_size=50)
 
     # model = DSSMOne(config, device)
-    model = torch.load(BASE_DATA_PATH + '/best_model_3_0_ford.pt').to(device)
+    model = torch.load(BASE_DATA_PATH + '/best_model_4_14_ford.pt').to(device)
 
     with torch.no_grad():
         for i, data_ in enumerate(data):
@@ -63,10 +63,15 @@ def kmax_pooling(x, dim, k):
 import pandas as pd
 
 BASE_DATA_PATH = '../data/'
+from transformers import BertConfig
 
 if __name__ == '__main__':
-    test()
+    pass
+    # test()
     # testVocab()
-    a = torch.randn(3, 3, 4)
-    b = kmax_pooling(a, 1, 1)
-    print(b.shape)
+
+    vocab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
+    config = BertConfig.from_pretrained(BASE_DATA_PATH + '/config.json')
+    five = DSSMFive(config, 'cpu', vocab)
+    e_ = five.embeddings
+    print(e_.weight)
