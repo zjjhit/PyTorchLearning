@@ -260,3 +260,49 @@ class DSSMFive(DSSMFour):
         return torch.tensor(t_)
 
 
+def test():
+    # Build a random data set.
+    import numpy as np
+    from torch.autograd import Variable
+    from transformers import BertConfig
+
+    config = BertConfig.from_pretrained('./config.json')
+    sample_size = 10
+    l_Qs = []
+    pos_l_Ds = []
+
+    for i in range(sample_size):
+        query_len = np.random.randint(1, 10)
+        l_Q = np.random.rand(5, query_len, config.hidden_size)
+        l_Qs.append(l_Q)
+
+        doc_len = np.random.randint(50, 500)
+        l_D = np.random.rand(5, doc_len, config.hidden_size)
+        pos_l_Ds.append(l_D)
+
+    # Till now, we have made a complete numpy dataset
+    # Now let's convert the numpy variables to torch Variable
+
+    for i in range(len(l_Qs)):
+        l_Qs[i] = Variable(torch.from_numpy(l_Qs[i]).float())
+        pos_l_Ds[i] = Variable(torch.from_numpy(pos_l_Ds[i]).float())
+
+    model = DSSMOne(config)
+
+    # Loss and optimizer
+    criterion = torch.nn.BCEWithLogitsLoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
+
+    # output variable, remember the cosine similarity with positive doc was at 0th index
+    y = torch.randn(10, 5)
+    y = (y > 0).int().float()
+
+    for i in range(sample_size):
+        y_pred = model({'query_': l_Qs[i], 'doc_': pos_l_Ds[i]})
+
+        b_, _ = y_pred.shape
+        print(i, y_pred.shape, y_pred.view(b_, -1).shape)
+        loss = criterion(y_pred.view(b_, -1), y[i].view(b_, -1))
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
