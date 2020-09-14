@@ -62,7 +62,7 @@ class DSSMCharDataset(Dataset):
                 'query_': torch.tensor(query_ids),
                 'doc_': torch.tensor(doc_ids)
             }
-            print(type(output['doc_']))
+            # print(type(output['doc_']))
             if self.model == 'train':
                 label_ = item['label']
                 output['label_'] = torch.tensor(np.long(label_))  # torch.tensor(label_)

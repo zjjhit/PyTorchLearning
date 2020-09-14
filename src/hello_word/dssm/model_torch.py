@@ -166,6 +166,7 @@ class DSSMFour(nn.Module):
             self.learn_gamma = nn.Conv1d(self.latent_out * 2, 1, 1)
         else:
             self.learn_gamma = nn.Linear(self.latent_out * 2, 2)
+        self.soft = nn.Softmax(dim=1)
 
     def forward(self, data):
 
@@ -188,7 +189,7 @@ class DSSMFour(nn.Module):
         out_ = torch.cat((q_s, d_s), 1)
         # out_ = out_.unsqueeze(2)
 
-        with_gamma = self.learn_gamma(out_)  ### --> B * 2 * 1
+        with_gamma = self.soft(self.learn_gamma(out_))  ### --> B * 2 * 1
         return with_gamma
 
 
@@ -215,6 +216,7 @@ class DSSMThree(nn.Module):
         self.doc_sem = nn.Linear(self.max_len * self.hidden_size, self.latent_out)
         # learning gamma
         self.learn_gamma = nn.Linear(self.latent_out * 2, 2)
+        self.soft = nn.Softmax(dim=1)
 
     def forward(self, data):
         q = self.embeddings(data['query_'])
@@ -234,7 +236,7 @@ class DSSMThree(nn.Module):
         ###双塔结构向量拼接
         out_ = torch.cat((q_s, d_s), 1)
 
-        with_gamma = self.learn_gamma(out_)  ### --> B * 2
+        with_gamma = self.soft(self.learn_gamma(out_))  ### --> B * 2)
         return with_gamma
 
 
@@ -257,6 +259,7 @@ class DSSMFive(DSSMFour):
             b_ = bin(int(self.vocab[char_]))[2:]
             p_ = [int(k) for k in '0' * (7 - len(b_)) + b_]
             t_.append(p_)
+        t_ = [t_[-1]] + t_[:-1]
         return torch.tensor(t_)
 
 

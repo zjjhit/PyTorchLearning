@@ -2,7 +2,6 @@
 
 import time
 
-import tqdm
 from sklearn.model_selection import KFold
 from torch.utils.data import DataLoader
 from transformers import BertConfig
@@ -23,7 +22,7 @@ def saveModel(model, file_path):
     # self.model.to(self.device)
 
 
-BASE_DATA_PATH = '../data/'
+BASE_DATA_PATH = './data/'
 import os
 import sys
 
@@ -33,11 +32,12 @@ if __name__ == '__main__':
     else:
         config_path = BASE_DATA_PATH + '/config.json'
 
-    config = BertConfig.from_pretrained(BASE_DATA_PATH + '/config.json')
+    config = BertConfig.from_pretrained(config_path)
 
     dataset = pd.read_csv(BASE_DATA_PATH + '/train.csv')  # processed_train.csv
 
     os.environ["CUDA_VISIBLE_DEVICES"] = config.gpu
+    print('CUDA_VISIBLE_DEVICES\t' + config.gpu)
     nums_ = config.nums  ## 15
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     vocab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     kf = KFold(n_splits=15, shuffle=True)
 
     for k, (train_index, val_index) in enumerate(kf.split(range(len(dataset)))):
-        if k == 2:
+        if k > 2:
             break
 
         train = dataset.iloc[train_index]
@@ -80,18 +80,26 @@ if __name__ == '__main__':
             model = DSSMFive(config, device, vocab).to(device)
             print('model_5')
 
-        optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
+        for m in model.modules():
+            if isinstance(m, (nn.Conv1d, nn.Linear)):
+                nn.init.xavier_uniform_(m.weight)
 
+        # optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
+        optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
         best_loss = 100000
+
         model.train()
         for n_ in range(nums_):
-            print('k ford and nums ,{} ,{}'.format(k, n_))
+
             train = DataLoader(train_base, batch_size=config.batch_size, shuffle=True)
 
-            data_loader = tqdm.tqdm(enumerate(train),
-                                    total=len(train))
-            for i, data_set in data_loader:
+            # data_loader = tqdm.tqdm(enumerate(train),
+            #                         total=len(train))
+
+            for i, data_set in enumerate(train):
                 data = {key: value.to(device) for key, value in data_set.items() if key != 'origin_'}
+
+                optimizer.zero_grad()
 
                 y_pred = model(data)
                 b_, _ = y_pred.shape
@@ -99,29 +107,34 @@ if __name__ == '__main__':
                 if config.loss == 'bce':
                     loss = criterion(y_pred.view(b_, -1), data['label_'].view(b_, -1))
                 else:
-                    loss = criterion(y_pred.view(b_, -1), data['label_'])
+                    loss = criterion(y_pred, data['label_'])
 
-                optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
 
-            if n_ % 5 == 0:
-                with torch.no_grad():
-                    data_loader = tqdm.tqdm(enumerate(val),
-                                            total=len(val))
-                    loss_val = 0
-                    for ii, data_set in data_loader:
-                        data = {key: value.to(device) for key, value in data_set.items() if key != 'origin_'}
-                        y_pred = model(data)
-                        b_, _ = y_pred.shape
-                        if config.loss == 'bce':
-                            a = criterion(y_pred.view(b_, -1), data['label_'].view(b_, -1))
-                        else:
-                            a = criterion(y_pred.view(b_, -1), data['label_'])
-                        loss_val += a.item()
+            print('k ford and nums ,{} ,{},loss is {}'.format(k, n_, loss.data.item()))
 
-                    print('val_loss,best_los,{},{}'.format(loss_val, best_loss))
-                    if best_loss > loss_val:
-                        best_loss = loss_val
-                        saveModel(model, BASE_DATA_PATH + '/best_model_{}_{}_ford.pt'.format(config.id, k))
-                        print('Best val loss {},{},{},{}'.format(best_loss, config.id, k, time.asctime()))
+            # if n_ % 10 == 0:
+            #     # with torch.no_grad():
+            #     model.eval()
+            #     data_loader = tqdm.tqdm(enumerate(val),
+            #                             total=len(val))
+            #     loss_val = 0
+            #     for ii, data_set in data_loader:
+            #         data = {key: value.to(device) for key, value in data_set.items() if key != 'origin_'}
+            #         y_pred = model(data)
+            #         b_, _ = y_pred.shape
+            #         if config.loss == 'bce':
+            #             a = criterion(y_pred.view(b_, -1), data['label_'].view(b_, -1))
+            #         else:
+            #             a = criterion(y_pred.view(b_, -1), data['label_'])
+            #         loss_val += a.item()
+            #
+            #     print('val_loss,best_los,{},{}'.format(loss_val, best_loss))
+            #     if best_loss > loss_val:
+            #         best_loss = loss_val
+            #         saveModel(model, BASE_DATA_PATH + '/best_model_{}_{}_ford.pt'.format(config.id, k))
+            #         print('Best val loss {},{},{},{}'.format(best_loss, config.id, k, time.asctime()))
+
+            if n_ % 100 == 0:
+                saveModel(model, BASE_DATA_PATH + '/final_model_{}_{}_{}ford.pt'.format(config.id, k, n_))
