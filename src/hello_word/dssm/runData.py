@@ -176,10 +176,17 @@ def processCluster(set_list, cluster_set, info_=''):
     for tmp_ in set_list:
         for id_ in tmp_:
             if not cluster_set[id_]:
-                cluster_set[id_] = tmp_
+                cluster_set[id_] = [tmp_]
             else:
                 # print(cluster_set[id_], tmp_)
-                cluster_set[id_] = cluster_set[id_] | tmp_
+                flag_ = 0
+                for i in range(len(cluster_set[id_])):
+                    if len(cluster_set[id_][i] & tmp_) * 2 >= min(len(tmp_), len(cluster_set[id_][i])):
+                        cluster_set[id_][i] = cluster_set[id_][i] | tmp_
+                        flag_ = 1
+                        break
+                if flag_ == 0:
+                    cluster_set[id_].append(tmp_)
 
     pickleDumpFile(BASE_PATH + 'cluster.{}.pk'.format(info_), cluster_set)
 
@@ -209,7 +216,7 @@ def runCluster(path_, info_=''):
 import multiprocessing
 import copy
 
-process_num = 10
+process_num = 1
 
 
 def arr_size(arr, size_):
@@ -245,6 +252,7 @@ def multiRun():
 
     for i in range(process_num):
         msg = "run %d" % (i)
+        print(msg)
         c_cluster2set = copy.deepcopy(cluster2set)
         pool.apply_async(func, (w_list[i], word2sentenceid, id2sentence, c_cluster2set, i))
 

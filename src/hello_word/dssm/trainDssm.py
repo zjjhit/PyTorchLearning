@@ -67,34 +67,38 @@ if __name__ == '__main__':
         val = DSSMCharDataset(val, vocab)
         val = DataLoader(val, batch_size=config.batch_size, num_workers=2)
 
-        if config.id == 1:
-            model = DSSMOne(config, device).to(device)
-            print('model_1')
-        elif config.id == 2:
-            model = DSSMTwo(config, device).to(device)
-            print('model_2')
-        elif config.id == 3:
-            model = DSSMThree(config, device).to(device)
-            print('model_3')
-        elif config.id == 4:
-            model = DSSMFour(config, device).to(device)
-            print('model_4')
-        elif config.id == 5:
-            model = DSSMFive(config, device, vocab).to(device)
-            print('model_5')
-        elif config.id == 6:
-            model = DSSMSix(config, device, vocab).to(device)
-            print('model_6')
-        elif config.id == 7:
-            model = DSSMSeven(config, device, vocab).to(device)
-            print('model_')
+        if 'pt' in config.reload:
+            model = torch.load(BASE_DATA_PATH + '/' + config.reload).to(device)
+        else:
+            if config.id == 1:
+                model = DSSMOne(config, device).to(device)
+                print('model_1')
+            elif config.id == 2:
+                model = DSSMTwo(config, device).to(device)
+                print('model_2')
+            elif config.id == 3:
+                model = DSSMThree(config, device).to(device)
+                print('model_3')
+            elif config.id == 4:
+                model = DSSMFour(config, device).to(device)
+                print('model_4')
+            elif config.id == 5:
+                model = DSSMFive(config, device, vocab).to(device)
+                print('model_5')
+            elif config.id == 6:
+                model = DSSMSix(config, device, vocab).to(device)
+                print('model_6')
+            elif config.id == 7:
+                model = DSSMSeven(config, device, vocab).to(device)
+                print('model_')
 
-        for m in model.modules():
-            if isinstance(m, (nn.Conv1d, nn.Linear)):
-                nn.init.xavier_uniform_(m.weight)
+            for m in model.modules():
+                if isinstance(m, (nn.Conv1d, nn.Linear)):
+                    # nn.init.xavier_uniform_(m.weight)
+                    nn.init.kaiming_normal_(m.weight, mode='fan_in')
 
         # optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
-        optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+        optimizer = torch.optim.SGD(model.parameters(), lr=1e-1)
         best_loss = 100000
 
         model.train()
@@ -113,15 +117,24 @@ if __name__ == '__main__':
                 y_pred = model(data)
                 b_, _ = y_pred.shape
 
-                if config.loss == 'bce':
-                    loss = criterion(y_pred.view(b_, -1), data['label_'].view(b_, -1))
-                else:
-                    loss = criterion(y_pred, data['label_'])
+                # if config.loss == 'bce':
+                #     loss = criterion(y_pred.view(b_, -1), data['label_'].view(b_, -1))
+                # else:
+                loss = criterion(y_pred, data['label_'])
 
                 loss.backward()
                 optimizer.step()
 
-            print('k ford and nums ,{} ,{},loss is {}'.format(k, n_, loss.data.item()))
+                # print('label,{},{}'.format(sum(data['label_']), len(data['label_'])))
+
+                if i % 500 == 0:
+                    print('k ford and nums ,{} ,{},loss is {}'.format(n_, i, loss.data.item()))
+                    for name, parms in model.named_parameters():
+                        print('-->name:', name, '\t\t-->grad_requirs:', parms.requires_grad)
+                        if parms.requires_grad:
+                            print('--weight', torch.mean(parms.data),
+                                  '\t\t-->grad_value:', torch.mean(parms.grad), '\n')
+                    print('\n\n')
 
             # if n_ % 10 == 0:
             #     # with torch.no_grad():

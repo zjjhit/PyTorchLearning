@@ -32,7 +32,7 @@ def test():
     data = DataLoader(data_base, batch_size=100)
 
     # model = DSSMOne(config, device)
-    model = torch.load(BASE_DATA_PATH + '/final_model_7_0_500ford.pt').to(device)
+    model = torch.load(BASE_DATA_PATH + '/final_model_5_0_0ford.pt').to(device)
 
     with torch.no_grad():
         for i, data_ in enumerate(data):
@@ -41,14 +41,12 @@ def test():
 
             org_ = data_['origin_']
             label_ = data_['label_']
-            # query_ = data_['query_'].unsqueeze(1)
-            # doc_ = data_['doc_'].unsqueeze(1)
-            # print(y_pred)
+
             k_ = torch.max(y_pred, 1)[1]
-            tmp_ = torch.cat((y_pred, label_.float().unsqueeze(1)), dim=1)
+            tmp_ = torch.cat((y_pred, k_.float().unsqueeze(1), label_.float().unsqueeze(1)), dim=1)
 
             print(tmp_)
-            print('\n'.join(org_))
+            # print('\n'.join(org_))
             # print(label_)
             acc_ = sum(k_ == label_)
 
