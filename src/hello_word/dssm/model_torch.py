@@ -263,49 +263,124 @@ class DSSMFive(DSSMFour):
         return torch.tensor(t_)
 
 
-def test():
-    # Build a random data set.
-    import numpy as np
-    from torch.autograd import Variable
-    from transformers import BertConfig
+class DSSMSix(nn.Module):
 
-    config = BertConfig.from_pretrained('./config.json')
-    sample_size = 10
-    l_Qs = []
-    pos_l_Ds = []
+    def __init__(self, config, device='cpu', vocab=None):
+        # super(DSSMThree, self).__init__()
+        super(DSSMSix, self).__init__()
 
-    for i in range(sample_size):
-        query_len = np.random.randint(1, 10)
-        l_Q = np.random.rand(5, query_len, config.hidden_size)
-        l_Qs.append(l_Q)
+        self.device = device
+        ###此部分的信息有待处理
 
-        doc_len = np.random.randint(50, 500)
-        l_D = np.random.rand(5, doc_len, config.hidden_size)
-        pos_l_Ds.append(l_D)
+        # self.embeddings.to(self.device)  ###????
+        self.vocab = vocab
+        self.latent_out = config.latent_out_1
+        self.hidden_size = config.hidden_size
+        self.kernel_out = config.kernel_out_1
+        self.kernel_size = config.kernel_size
+        self.max_len = config.max_len
+        self.kmax = config.kmax
 
-    # Till now, we have made a complete numpy dataset
-    # Now let's convert the numpy variables to torch Variable
+        self.hidden_size = 7
+        self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size)
 
-    for i in range(len(l_Qs)):
-        l_Qs[i] = Variable(torch.from_numpy(l_Qs[i]).float())
-        pos_l_Ds[i] = Variable(torch.from_numpy(pos_l_Ds[i]).float())
+        # layers for docs
+        self.doc_sem = nn.Linear(self.max_len * self.hidden_size, self.latent_out)
+        # learning gamma
+        self.learn_gamma = nn.Linear(self.latent_out * 2, 2)
+        self.soft = nn.Softmax(dim=1)
 
-    model = DSSMOne(config)
+        tmp_ = self.__toBcode__()
+        self.embeddings.weight.data.copy_(tmp_)
+        self.embeddings.weight.requires_grad = False
 
-    # Loss and optimizer
-    criterion = torch.nn.BCEWithLogitsLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
+    def __toBcode__(self):
+        t_ = []
+        for char_ in self.vocab:
+            b_ = bin(int(self.vocab[char_]))[2:]
+            p_ = [int(k) for k in '0' * (7 - len(b_)) + b_]
+            t_.append(p_)
+        t_ = [t_[-1]] + t_[:-1]
+        return torch.tensor(t_)
 
-    # output variable, remember the cosine similarity with positive doc was at 0th index
-    y = torch.randn(10, 5)
-    y = (y > 0).int().float()
+    def forward(self, data):
+        q = self.embeddings(data['query_'])
+        d = self.embeddings(data['doc_'])
 
-    for i in range(sample_size):
-        y_pred = model({'query_': l_Qs[i], 'doc_': pos_l_Ds[i]})
+        b_, l_, d_ = q.shape
+        q = q.view(b_, -1)
+        d = d.view(b_, -1)
 
-        b_, _ = y_pred.shape
-        print(i, y_pred.shape, y_pred.view(b_, -1).shape)
-        loss = criterion(y_pred.view(b_, -1), y[i].view(b_, -1))
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        ### query
+        q_s = F.relu(self.doc_sem(q))
+
+        ###doc
+        d_s = F.relu(self.doc_sem(d))
+
+        ###双塔结构向量拼接
+        out_ = torch.cat((q_s, d_s), 1)
+
+        with_gamma = self.soft(self.learn_gamma(out_))  ### --> B * 2)
+        return with_gamma
+
+
+class DSSMSeven(nn.Module):
+
+    def __init__(self, config, device='cpu', vocab=None):
+        # super(DSSMThree, self).__init__()
+        super(DSSMSeven, self).__init__()
+
+        self.device = device
+        ###此部分的信息有待处理
+
+        # self.embeddings.to(self.device)  ###????
+        self.vocab = vocab
+        self.latent_out = config.latent_out_1
+        self.hidden_size = config.hidden_size
+        self.kernel_out = config.kernel_out_1
+        self.kernel_size = config.kernel_size
+        self.max_len = config.max_len
+        self.kmax = config.kmax
+
+        self.hidden_size = 7
+        self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size)
+
+        # layers for docs
+        self.doc_sem = nn.Linear(self.max_len * self.hidden_size, self.latent_out)
+        # learning gamma
+        self.learn_gamma = nn.Linear(self.latent_out, 2)
+        self.soft = nn.Softmax(dim=1)
+
+        tmp_ = self.__toBcode__()
+        self.embeddings.weight.data.copy_(tmp_)
+        self.embeddings.weight.requires_grad = False
+
+    def __toBcode__(self):
+        t_ = []
+        for char_ in self.vocab:
+            b_ = bin(int(self.vocab[char_]))[2:]
+            p_ = [int(k) for k in '0' * (7 - len(b_)) + b_]
+            t_.append(p_)
+        t_ = [t_[-1]] + t_[:-1]
+        return torch.tensor(t_)
+
+    def forward(self, data):
+        q = self.embeddings(data['query_'])
+        d = self.embeddings(data['doc_'])
+
+        b_, l_, d_ = q.shape
+        q = q.view(b_, -1)
+        d = d.view(b_, -1)
+
+        ### query
+        q_s = F.relu(self.doc_sem(q))
+
+        ###doc
+        d_s = F.relu(self.doc_sem(d))
+
+        ###双塔结构向量拼接
+        # out_ = torch.cat((q_s, d_s), 1)
+        out_ = q_s - d_s
+
+        with_gamma = self.soft(self.learn_gamma(out_))  ### --> B * 2)
+        return with_gamma

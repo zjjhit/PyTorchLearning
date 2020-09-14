@@ -7,8 +7,6 @@
 # Date:         2020/9/11
 # -------------------------------------------------------------------------------
 
-import os
-
 from torch.utils.data import DataLoader
 
 from dssm.data_process import *
@@ -18,7 +16,7 @@ from dssm.model_torch import *
 # model = DSSMOne(config)
 # stat(model, (256, 256))
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 BASE_DATA_PATH = '../data/'
 
 
@@ -31,10 +29,10 @@ def test():
     print('begin')
 
     data_base = DSSMCharDataset(dataset, vacab)
-    data = DataLoader(data_base, batch_size=50)
+    data = DataLoader(data_base, batch_size=100)
 
     # model = DSSMOne(config, device)
-    model = torch.load(BASE_DATA_PATH + '/final_model_4_0_200ford.pt').to(device)
+    model = torch.load(BASE_DATA_PATH + '/final_model_7_0_500ford.pt').to(device)
 
     with torch.no_grad():
         for i, data_ in enumerate(data):

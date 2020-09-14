@@ -36,11 +36,14 @@ if __name__ == '__main__':
 
     dataset = pd.read_csv(BASE_DATA_PATH + '/train.csv')  # processed_train.csv
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = config.gpu
-    print('CUDA_VISIBLE_DEVICES\t' + config.gpu)
-    nums_ = config.nums  ## 15
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     vocab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
+
+    if '-1' not in config.gpu:
+        os.environ["CUDA_VISIBLE_DEVICES"] = config.gpu
+        print('CUDA_VISIBLE_DEVICES\t' + config.gpu)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = 'cpu'
 
     if config.loss == 'bce':
         criterion = torch.nn.BCEWithLogitsLoss().to(device)  ###需要调整 网罗结构
@@ -50,7 +53,7 @@ if __name__ == '__main__':
     print('begin')
 
     kf = KFold(n_splits=15, shuffle=True)
-
+    nums_ = config.nums
     for k, (train_index, val_index) in enumerate(kf.split(range(len(dataset)))):
         if k > 2:
             break
@@ -79,6 +82,12 @@ if __name__ == '__main__':
         elif config.id == 5:
             model = DSSMFive(config, device, vocab).to(device)
             print('model_5')
+        elif config.id == 6:
+            model = DSSMSix(config, device, vocab).to(device)
+            print('model_6')
+        elif config.id == 7:
+            model = DSSMSeven(config, device, vocab).to(device)
+            print('model_')
 
         for m in model.modules():
             if isinstance(m, (nn.Conv1d, nn.Linear)):
