@@ -216,8 +216,6 @@ def runCluster(path_, info_=''):
 import multiprocessing
 import copy
 
-process_num = 1
-
 
 def arr_size(arr, size_):
     s = []
@@ -234,6 +232,9 @@ def func(word_list, word2sentenceid, id2sentence, cluster2set, i):
         word_ssen_et = word2sentenceid[word]
         set_list = processSet(word_ssen_et, id2sentence)
         processCluster(set_list, cluster2set, str(i))
+
+
+process_num = 3
 
 
 def multiRun():

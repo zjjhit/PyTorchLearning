@@ -98,7 +98,7 @@ if __name__ == '__main__':
                     nn.init.kaiming_normal_(m.weight, mode='fan_in')
 
         # optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
-        optimizer = torch.optim.SGD(model.parameters(), lr=1e-1)
+        optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
         best_loss = 100000
 
         model.train()
