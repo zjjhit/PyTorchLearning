@@ -7,32 +7,30 @@
 # Date:         2020/9/11
 # -------------------------------------------------------------------------------
 
+import os
+
 from torch.utils.data import DataLoader
 
 from dssm.data_process import *
 from dssm.model_torch import *
 
-# config = BertConfig.from_pretrained('./config.json')
-# model = DSSMOne(config)
-# stat(model, (256, 256))
-
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 BASE_DATA_PATH = '../data/'
 
 
 def test():
-    dataset = pd.read_csv(BASE_DATA_PATH + '/1test.csv')
+    dataset = pd.read_csv(BASE_DATA_PATH + '/test.csv')
     print('begin0')
     device = 'cpu'
     vacab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
 
     print('begin')
 
-    data_base = DSSMCharDataset(dataset, vacab)
+    data_base = DSSMCharDataset(dataset, vacab, max_len=64)
     data = DataLoader(data_base, batch_size=100)
 
     # model = DSSMOne(config, device)
-    model = torch.load(BASE_DATA_PATH + '/final_model_5_0_0ford.pt').to(device)
+    model = torch.load(BASE_DATA_PATH + '/final_model_4_0_100ford.pt').to(device)
 
     with torch.no_grad():
         for i, data_ in enumerate(data):
@@ -54,11 +52,6 @@ def test():
             print(acc_.item(), b_, float(acc_.item()) / b_)
 
     # print(model.embeddings.weight)
-
-
-def kmax_pooling(x, dim, k):
-    index = x.topk(k, dim=dim)[1].sort(dim=dim)[0]
-    return x.gather(dim, index)
 
 
 import pandas as pd
@@ -97,14 +90,12 @@ def testLL():
     # print('model_5')
 
 
+def kmax_pooling(x, dim, k):
+    index = x.topk(k, dim=dim)[1].sort(dim=dim)[0]
+    return x.gather(dim, index)
+
+
 if __name__ == '__main__':
     pass
     # testLL()
     test()
-    # testVocab()
-    #
-    # vocab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
-    # config = BertConfig.from_pretrained(BASE_DATA_PATH + '/config.json')
-    # five = DSSMFive(config, 'cpu', vocab)
-    # e_ = five.embeddings
-    # print(e_.weight)

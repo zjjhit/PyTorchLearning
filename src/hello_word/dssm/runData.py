@@ -84,7 +84,7 @@ def preprocessData(path_):
                     else:
                         word2sentenceid[k].add(num_)
 
-            id2sentence[num_] = [tmp_[-2], False]
+            id2sentence[num_] = [tmp_[-2], False]  # 暂时不使用 list
             cluster2set[num_] = False
             num_ += 1
 
@@ -128,7 +128,7 @@ def isSame(s1, s2):
         return True
 
     flag_3 = [threshold_['tf'][1]['mean'] > tf, threshold_['edt'][0]['mean'] < edt, threshold_['jaca'][0]['mean'] > jaca]
-    if flag_3.count(True) >= 1:
+    if flag_3.count(True) >= 2:
         return False
 
     flag_1 = [threshold_['tf'][0]['mean'] - threshold_['tf'][0]['std_var'] <= tf, \
@@ -153,7 +153,7 @@ def processSet(sen_set, id2sentence):
 
         flag_ = []
         for k in range(1, len(tmp_list[1:])):
-            if isSame(id2sentence[a], id2sentence[tmp_list[k]]):
+            if isSame(id2sentence[a][0], id2sentence[tmp_list[k]][0]):
                 flag_.append(tmp_list[k])
                 a_set.add(tmp_list[k])
 
@@ -170,7 +170,7 @@ def processCluster(set_list, cluster_set, info_=''):
     """
     针对word2set的计算结果，更新cluster2set
     :param set_list:
-    :param cluster_set:
+    :param cluster_set: sentenceid --> ???
     :return:
     """
     for tmp_ in set_list:
@@ -188,7 +188,9 @@ def processCluster(set_list, cluster_set, info_=''):
                 if flag_ == 0:
                     cluster_set[id_].append(tmp_)
 
+    print(BASE_PATH + 'cluster.{}.pk'.format(info_))
     pickleDumpFile(BASE_PATH + 'cluster.{}.pk'.format(info_), cluster_set)
+    return BASE_PATH + 'cluster.{}.pk'.format(info_)
 
 
 BASE_PATH = '../cluster/'
@@ -227,42 +229,70 @@ def arr_size(arr, size_):
     return s
 
 
-def func(word_list, word2sentenceid, id2sentence, cluster2set, i):
-    for word in word_list:
+def func(word_list, word2sentenceid, id2sentence, cluster2set, info):
+    for i, word in enumerate(word_list):
         word_ssen_et = word2sentenceid[word]
+        if len(word_ssen_et) > 15:
+            continue
+        print(i, info, word)
         set_list = processSet(word_ssen_et, id2sentence)
-        processCluster(set_list, cluster2set, str(i))
+    return processCluster(set_list, cluster2set, str(info))
 
 
-process_num = 3
+# import multiprocessing.Process as Process
+
+import random
 
 
 def multiRun():
+    process_num = 3
     with open(BASE_PATH + '/baseDict.pk', 'rb') as f:
         id2sentence = pickle.load(f)
         word2sentenceid = pickle.load(f)
         cluster2set = pickle.load(f)
 
-    word_list = list(word2sentenceid.keys())
+    word_list = random.sample(list(word2sentenceid.keys()), 30000)
     wordlist_len = int(len(word_list) / process_num)
 
-    w_list = arr_size(word_list, wordlist_len)
-    # print(len(word_list))
+    w_list = arr_size(word_list, 20)
+    print('w_list', len(w_list), len(word_list))
 
-    pool = multiprocessing.Pool(processes=process_num)
-
+    pool = multiprocessing.Pool(processes=process_num + 2)
+    result_ = []
     for i in range(process_num):
         msg = "run %d" % (i)
-        print(msg)
+        print(msg, len(w_list[i]))
         c_cluster2set = copy.deepcopy(cluster2set)
-        pool.apply_async(func, (w_list[i], word2sentenceid, id2sentence, c_cluster2set, i))
+        c_word2sentenceid = copy.deepcopy(word2sentenceid)
+        c_id2sentence = copy.deepcopy(id2sentence)
+
+        result_.append(pool.apply_async(func, args=(w_list[i], c_word2sentenceid, c_id2sentence, c_cluster2set, i,)))
 
     pool.close()
     pool.join()
 
+    for k in result_:
+        print(k.get())
+
+    # ps = []
+    # for i in range(process_num):
+    #     msg = "run %d" % (i)
+    #     print(msg, len(w_list[i]))
+    #     c_cluster2set = copy.deepcopy(cluster2set)
+    #     c_word2sentenceid = copy.deepcopy(word2sentenceid)
+    #     c_id2sentence = copy.deepcopy(id2sentence)
+    #
+    #     p = Process(target=func, name="worker" + str(i), args=(w_list[i], c_word2sentenceid, c_id2sentence, c_cluster2set, i))
+    #     ps.append(p)
+    #
+    # for i in range(process_num):
+    #     ps[i].start()
+    #
+    # for i in range(process_num):
+    #     ps[i].join()
+
 
 # ===============================================================================================
-import pandas as pd
 import numpy as np
 
 
@@ -321,34 +351,213 @@ def test(s1, s2):
     print(distance_edit(s1, s2))
 
 
+tmp_ = ['BIGBYTE', 'LIMITED./SHINER', 'HISAFEW', 'NO162', 'Muinjanovna"', 'APPLAINC', 'LTD701', 'C/O,', 'EHAOLOGY',
+        'SHENZHENHUASHUNCHANGTOYSCO', 'LTD./ON', '1211,CO', 'LONGDISTRICT', 'INT`T', 'TRADENO6', '401,FL.4,BUILDING', 'ALLASFE',
+        'HONGFUYU', 'PATHY', 'HSINCHU', '207,A', 'PROCES', 'TZ1276808', 'DEYICHENG', '1616,', 'MIRRACK', 'HONE-STRONG', 'ZHENCUI',
+        'ICELL', '05/11/20', 'ZHAODA', 'ПРОИЗ-ВА', 'PROCESS-', 'Harbin', 'FREYESLEBENSTRASSE', 'TECHNOLOGY(SUZHOU)CO.LTD.',
+        'SHANGSHAO', 'KUNZHUO', 'VLAARDINGEN', 'CO..LTD.JINAN', '"РЕДЕКС', 'TECHCHEM', 'ELOVTROPNIC', '200124,', 'CHATINGBEI', 'Jukun',
+        'MARUKOME', 'KNUTHTRADE', 'CUMSUN']
+
+
+def mergeData(words):
+    """
+    基于原始的word 进行 数据合并
+    :param words:
+    :return:
+    """
+    with open(BASE_PATH + '/baseDict.pk', 'rb') as f:
+        id2sentence = pickle.load(f)
+        word2sentenceid = pickle.load(f)
+        cluster2set = pickle.load(f)
+
+    c_0 = pickle.load(open(BASE_PATH + '/cluster.0.pk', 'rb'))
+    c_1 = pickle.load(open(BASE_PATH + '/cluster.1.pk', 'rb'))
+    c_2 = pickle.load(open(BASE_PATH + '/cluster.2.pk', 'rb'))
+
+    for w in words:
+        sen_ = word2sentenceid.get(w, False)
+        print(w, sen_)
+        for sen_id in sen_:
+            t_ = c_0.get(sen_id, False)
+            if t_:
+                for k in t_:
+                    print(k)
+                print('List')
+
+
+def pianMen():
+    with open(BASE_PATH + '/baseDicta.pk', 'rb') as f:
+        id2sentence = pickle.load(f)
+        word2sentenceid = pickle.load(f)
+        cluster2set = pickle.load(f)
+
+    words_ = random.sample(word2sentenceid.keys(), 5000)
+    fout = open('tmp_result', 'w')
+    for word in words_:
+        set_ = word2sentenceid[word]
+        print(word, len(set_))
+        if len(set_) >= 2 and len(set_) <= 1000:
+            result_ = processSet(set_, id2sentence)
+            num_ = 0
+            for s_ in result_:
+                print(word, s_)
+                tmp_ = ''
+                for id_ in s_:
+                    tmp_ += id2sentence[id_][0] + '\001\002'
+                fout.write(word + '\001\001' + str(num_) + '\001\001' + tmp_.rstrip('\001\002') + '\n')
+    fout.close()
+
+
+import pandas as pd
+
+
+def writeExcel(path_):
+    df = pd.DataFrame(columns=['class_name', 'text'])
+
+    name_ = []
+    text_ = []
+    dic_ = {}
+    with open(path_, 'r') as f:
+        for one in f:
+            tmp_ = one.rstrip().split('\001\001')
+            if len(tmp_) != 3:
+                continue
+            if tmp_[0] not in dic_:
+                dic_[tmp_[0]] = [tmp_[2]]
+            else:
+                dic_[tmp_[0]].append(tmp_[2])
+
+    for k in dic_:
+        for i, a in enumerate(dic_[k]):
+
+            txt_ = a.split('\001\002')
+            for t in txt_:
+                name_.append(k + '_' + str(i))
+                text_.append(t)
+
+    print(len(name_))
+    df['class_name'] = name_
+    df['text'] = text_
+
+    df.to_excel('sample.xlsx')
+
+
+######################################
+
+import os, torch
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+device = 'cpu'
+BASE_DATA_PATH = '../data/'
+vacab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
+model = torch.load(BASE_DATA_PATH + '/final_model_4_0_100ford.pt').to(device)
+model.eval()
+max_len = 64
+
+
+def convert_tokens_to_ids(query, vocab):
+    ids_ = []
+    for one in query:
+        if one.isalpha():
+            one = one.upper()
+        if one in vocab:
+            ids_.append(vocab[one])
+        else:
+            ids_.append(vocab['<UNK>'])
+    return ids_
+
+
+def singleOne(s1, s2):
+    q = s1[:min(len(s1), max_len)]
+    d = s2[:min(len(s2), max_len)]
+
+    q = convert_tokens_to_ids(q, vacab)
+    q = q + [0] * (64 - len(q))
+
+    d = convert_tokens_to_ids(d, vacab)
+    d = d + [0] * (64 - len(d))
+
+    data_ = {'query_': torch.tensor(q).unsqueeze(0), 'doc_': torch.tensor(d).unsqueeze(0)}
+    with torch.no_grad():
+        y_pred = model(data_)
+        # print(y_pred)
+        k_ = torch.max(y_pred, 1)[1][0]
+        return k_.data.item()
+    return 1
+
+
+def processSetTwo(sen_list):
+    """
+    处理set集合，获取子聚类类别
+    :param sen_set:  sen_list的集合
+    :return:
+    """
+    tmp_list = list(sen_list)
+    set_list = []
+    while len(tmp_list) >= 1:
+        a = tmp_list[0]
+        a_set = [a]
+
+        flag_ = []
+        for k in range(1, len(tmp_list[1:])):
+            if singleOne(a, tmp_list[k]) == 0 and distance_edit(a, tmp_list[k]) < 0.35:
+                flag_.append(tmp_list[k])
+                a_set.append(tmp_list[k])
+
+        flag_.append(a)
+        for one in flag_:
+            # print(one,tmp_list)
+            tmp_list.remove(one)
+        set_list.append(a_set)
+
+    return set_list
+
+
+def XXC(path_):
+    dic_ = {}
+    with open(path_, 'r') as f:
+        for one in f:
+            tmp_ = one.rstrip().split('\001\001')
+            if len(tmp_) != 3:
+                continue
+            if tmp_[0] not in dic_:
+                dic_[tmp_[0]] = tmp_[2].split('\001\002')
+            else:
+                dic_[tmp_[0]] += tmp_[2].split('\001\002')
+
+    all_ = 0
+    for k in dic_:
+        print(k, len(dic_[k]))
+        all_ += len(dic_[k])
+    print(all_)
+
+    name_ = []
+    text_ = []
+    df = pd.DataFrame(columns=['class_name', 'text'])
+    for k in dic_:
+        result_ = processSetTwo(dic_[k])
+        for i, l_ in enumerate(result_):
+            for one in l_:
+                name_.append(k + '_' + str(i))
+                text_.append(one)
+
+    print(len(name_))
+    df['class_name'] = name_
+    df['text'] = text_
+
+    df.to_excel('sample.xlsx')
+
+
 if __name__ == '__main__':
     pass
-    # s1 = 'YUEQING ZHENGLI MACHINERY CO LTD'
-    # s2 = 'YUEQING XINDALI AND EXPORT CO.LTD'
-    #
-    # test(s1, s2)
-    #
-    # s1 = 'HANGZHOU SOYANG TECHNOLOGIES CO LTD'
-    # s2 = 'HANGZHOU SOYANG TECH CO LTD'
-    # test(s1, s2)
-    #
-    # k_ = {i: str(k) for i, k in enumerate([1])}
-    #
-    # b = processSet(set(k_.keys()), k_)
-    # for k in b:
-    #     print(k)
+    # multiRun()
 
-    # runCluster(BASE_PATH + '/cluster.csv')
-    #
-    # id2sen = pickle.load(open(BASE_PATH + '/baseDict.pk', 'rb'))
-    # dic_ = pickle.load(open(BASE_PATH + '/cluster.pk', 'rb'))
-    # for k in dic_:
-    #     if len(dic_[k]) >= 2:
-    #         tmp_ = ''
-    #         for i in dic_[k]:
-    #             tmp_ += '\t' + id2sen[i][0] + '\001\001' + str(i)
-    #         print(tmp_)
-
-    # getThreshold('../data/train.csv')
     # runCluster('../data/data.log')
-    multiRun()
+    # pianMen()
+    # writeExcel('tmp_result')
+    XXC('tmp_result')
+    a = 'ROHM AND HAAS INTERNATIONAL TRADE SHANGHAI CO LTD'
+    b = 'ROHM AND HAAS  (FOSHAN) SPECIALTY MATERIALS CO., LTD.'
+    print(singleOne(a, b))
+    print(isSame(a, b))
+    print(distance_edit(a, b))
