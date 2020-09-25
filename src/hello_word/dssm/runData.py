@@ -59,7 +59,7 @@ def distance_tf(s1, s2):
 filter_word = set(
     {'LTD', 'CO.,LTD', 'LIMITED', 'LTD.', 'CO', 'CO.,LTD.', 'CO.LTD', 'COMPANY', 'GROUP', 'INC.', 'CO.LTD.', 'CO.',
      'CO.,', 'CO.,',
-     'LIMITED', 'LIMITED.', 'LTD,', 'LTD.,', 'LIMITE', '.,LTD', ',LTD', 'LTD.', 'LLC.', 'CO..LTD.'})
+     'LIMITED', 'LIMITED.', 'LTD,', 'LTD.,', 'LIMITE', '.,LTD', ',LTD', 'LTD.', 'LLC.', 'CO..LTD.', 'CO.,LIMITED'})
 
 
 def preprocessData(path_):
@@ -124,19 +124,85 @@ def isSame(s1, s2):
 
     flag_0 = [threshold_['tf'][0]['mean'] <= tf, threshold_['edt'][0]['mean'] >= edt, threshold_['jaca'][0]['mean'] <= jaca]
 
-    if flag_0.count(True) >= 2:
-        return True
+    if flag_0[1] == True or flag_0.count(True) >= 2:
+        return 0, [edt, tf, jaca]
 
     flag_3 = [threshold_['tf'][1]['mean'] > tf, threshold_['edt'][0]['mean'] < edt, threshold_['jaca'][0]['mean'] > jaca]
     if flag_3.count(True) >= 2:
-        return False
+        return 1, [edt, tf, jaca]
 
     flag_1 = [threshold_['tf'][0]['mean'] - threshold_['tf'][0]['std_var'] <= tf, \
               threshold_['edt'][0]['mean'] - threshold_['edt'][0]['std_var'] >= edt, \
               threshold_['jaca'][0]['mean'] - threshold_['jaca'][0]['std_var'] <= jaca]
 
-    if flag_1.conut(True) >= 2:
-        return True
+    if flag_1.count(True) >= 2:
+        return 0, [edt, tf, jaca]
+    else:
+        return 1, [edt, tf, jaca]
+
+
+import math
+
+
+def isSameNew(s1, s2):
+    threshold_ = {'tf': {0: {'mean': 0.692, 'var': 0.024, 'std_var': 0.156},
+                         1: {'mean': 0.237, 'var': 0.016, 'std_var': 0.128}},
+                  'edt': {0: {'mean': 0.1, 'var': 0.012, 'std_var': 0.112},
+                          1: {'mean': 0.386, 'var': 0.008, 'std_var': 0.091}},
+                  'jaca': {0: {'mean': 0.54, 'var': 0.031, 'std_var': 0.178},
+                           1: {'mean': 0.128, 'var': 0.007, 'std_var': 0.085}}}
+
+    def filterWord(s, filter_list):
+        return ' '.join([k for k in s.split() if k not in filter_list])
+
+    s1 = filterWord(s1, filter_word)
+    s2 = filterWord(s2, filter_word)
+
+    edt = distance_edit(s1, s2)
+    tf = distance_tf(s1, s2)
+    jaca = distance_jacaard(s1, s2)
+
+    def relativeDis(dis_, thresh_, edt_flag=False):
+        """
+        计算距离值与对应阈值的相对值
+        :param dis_:
+        :param thresh_:
+        :return:
+        """
+        try:
+            mean_var = (thresh_[0]['var'] + thresh_[1]['var']) / 2
+            pos_dis = int(abs(thresh_[1]['mean'] - dis_) / mean_var)
+            neg_dis = int(abs(thresh_[0]['mean'] - dis_) / mean_var)
+        except BaseException:
+            print('Wrong, {} {} {}'.format(dis_, mean_var, thresh_[0]['mean']))
+        if edt_flag:
+            if dis_ <= thresh_[0]['mean']:
+                dis_ = pos_dis
+            elif dis_ >= thresh_[1]['mean']:
+                dis_ = -1 * neg_dis
+            else:
+                dis_ = pos_dis + -1 * neg_dis
+        else:
+            if dis_ >= thresh_[0]['mean']:
+                dis_ = pos_dis
+            elif dis_ <= thresh_[1]['mean']:
+                dis_ = -1 * neg_dis
+            else:
+                dis_ = pos_dis + -1 * neg_dis
+
+        return dis_
+
+    if math.isnan(edt):
+        edt = 1
+    if math.isnan(tf):
+        tf = 0
+    if math.isnan(jaca):
+        jaca = 0
+    edt_dis = relativeDis(edt, threshold_['edt'], True)
+    tf_dis = relativeDis(tf, threshold_['tf'])
+    jaca_dis = relativeDis(jaca, threshold_['jaca'])
+
+    return edt, edt_dis, tf, tf_dis, jaca, jaca_dis
 
 
 def processSet(sen_set, id2sentence):
@@ -344,7 +410,6 @@ def npInfo(a_):
 
 # ===============================================================================================
 
-
 def test(s1, s2):
     print(distance_jacaard(s1, s2))
     print(distance_tf(s1, s2))
@@ -355,7 +420,8 @@ tmp_ = ['BIGBYTE', 'LIMITED./SHINER', 'HISAFEW', 'NO162', 'Muinjanovna"', 'APPLA
         'SHENZHENHUASHUNCHANGTOYSCO', 'LTD./ON', '1211,CO', 'LONGDISTRICT', 'INT`T', 'TRADENO6', '401,FL.4,BUILDING', 'ALLASFE',
         'HONGFUYU', 'PATHY', 'HSINCHU', '207,A', 'PROCES', 'TZ1276808', 'DEYICHENG', '1616,', 'MIRRACK', 'HONE-STRONG', 'ZHENCUI',
         'ICELL', '05/11/20', 'ZHAODA', 'ПРОИЗ-ВА', 'PROCESS-', 'Harbin', 'FREYESLEBENSTRASSE', 'TECHNOLOGY(SUZHOU)CO.LTD.',
-        'SHANGSHAO', 'KUNZHUO', 'VLAARDINGEN', 'CO..LTD.JINAN', '"РЕДЕКС', 'TECHCHEM', 'ELOVTROPNIC', '200124,', 'CHATINGBEI', 'Jukun',
+        'SHANGSHAO', 'KUNZHUO', 'VLAARDINGEN', 'CO..LTD.JINAN', '"РЕДЕКС', 'TECHCHEM', 'ELOVTROPNIC', '200124,', 'CHATINGBEI',
+        'Jukun',
         'MARUKOME', 'KNUTHTRADE', 'CUMSUN']
 
 
@@ -450,7 +516,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 device = 'cpu'
 BASE_DATA_PATH = '../data/'
 vacab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
-model = torch.load(BASE_DATA_PATH + '/final_model_4_0_100ford.pt').to(device)
+model = torch.load(BASE_DATA_PATH + '/final_model_4_0_400ford.pt').to(device)
 model.eval()
 max_len = 64
 
@@ -555,9 +621,9 @@ if __name__ == '__main__':
     # runCluster('../data/data.log')
     # pianMen()
     # writeExcel('tmp_result')
-    XXC('tmp_result')
-    a = 'ROHM AND HAAS INTERNATIONAL TRADE SHANGHAI CO LTD'
-    b = 'ROHM AND HAAS  (FOSHAN) SPECIALTY MATERIALS CO., LTD.'
+    # XXC('tmp_result')
+    a = 'DONGGUAN CARNIVAL IMPORT & EXPORT TRADING CO., LTD.'
+    b = 'QUANZHOU CARNIVAL BAGS & SUITCASES CO.,LTD'
     print(singleOne(a, b))
     print(isSame(a, b))
     print(distance_edit(a, b))

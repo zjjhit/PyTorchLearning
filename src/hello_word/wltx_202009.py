@@ -204,11 +204,31 @@ def makeCharDict(path_):
     fout.close()
 
 
+def runa(path_):
+    with open(path_, 'r') as f:
+        for i, data in enumerate(f.readlines()):
+            if i <= 348:
+                print(data.rstrip())
+            else:
+                tmp_ = data.rstrip().split('\t\t')
+                if len(tmp_) != 2:
+                    print(len(tmp_))
+                    continue
+                txt_ = tmp_[0].split('\002')
+                if len(txt_) != 2:
+                    continue
+                if txt_[0] in txt_[1] or txt_[1] in txt_[0]:
+                    continue
+                else:
+                    print(data.rstrip())
+
+
 if __name__ == '__main__':
     pass
     # makeData('./data/data.log')
     # preData('./data/com.xml')
     # preDataTwo('./data/data.dbc')
     # preDataThree('./data/companys.accdb')
-    tmpData('./data/train.data.loc')
+    # tmpData('./data/train.data.loc')
     # makeCharDict('./data/data.log')
+    runa('./tmp')

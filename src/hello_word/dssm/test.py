@@ -4,11 +4,13 @@
 # Name:         test
 # Description:  
 # Author:       lenovo
-# Date:         2020/9/11
+# Date:         2020/9/25
 # -------------------------------------------------------------------------------
 
 import os
 
+import pandas as pd
+######################################
 from torch.utils.data import DataLoader
 
 from dssm.data_process import *
@@ -19,18 +21,19 @@ BASE_DATA_PATH = '../data/'
 
 
 def test():
-    dataset = pd.read_csv(BASE_DATA_PATH + '/test.csv')
+    dataset = pd.read_csv(BASE_DATA_PATH + '/tt.csv')
     print('begin0')
+    # os.environ["CUDA_VISIBLE_DEVICES"] = '2'
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     device = 'cpu'
     vacab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
 
     print('begin')
 
-    data_base = DSSMCharDataset(dataset, vacab, max_len=64)
+    data_base = DSSMCharDataset(dataset, vacab, max_len=64)  # same with the config_4
     data = DataLoader(data_base, batch_size=100)
 
-    # model = DSSMOne(config, device)
-    model = torch.load(BASE_DATA_PATH + '/final_model_4_0_100ford.pt').to(device)
+    model = torch.load(BASE_DATA_PATH + '/final_model_4_0_400ford.pt').to(device)
 
     with torch.no_grad():
         for i, data_ in enumerate(data):
@@ -54,48 +57,6 @@ def test():
     # print(model.embeddings.weight)
 
 
-import pandas as pd
-
-BASE_DATA_PATH = '../data/'
-from transformers import BertConfig
-
-
-def testLL():
-    config_path = BASE_DATA_PATH + '/config.json_5'
-
-    config = BertConfig.from_pretrained(config_path)
-
-    dataset = pd.read_csv(BASE_DATA_PATH + '/t.csv')  # processed_train.csv
-
-    device = 'cpu'
-    vocab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
-    train = dataset.iloc[range(len(dataset))]
-
-    train_base = DSSMCharDataset(train, vocab)
-    for _ in range(3):
-        train_d = DataLoader(train_base, batch_size=3, shuffle=True)
-        for i, d in enumerate(train_d):
-            print(d)
-        print('\n\n')
-
-    model = DSSMFive(config, device, vocab).to(device)
-    criterion = torch.nn.CrossEntropyLoss().to(device)
-
-    # for i, k in enumerate(train_d):
-    #     y = model(k)
-    #     c_ = criterion(y, k['label_'])
-    #     print(y, c_)
-    #     print(y.shape)
-    #     print(model.embeddings.weight[0])
-    # print('model_5')
-
-
-def kmax_pooling(x, dim, k):
-    index = x.topk(k, dim=dim)[1].sort(dim=dim)[0]
-    return x.gather(dim, index)
-
-
 if __name__ == '__main__':
     pass
-    # testLL()
     test()

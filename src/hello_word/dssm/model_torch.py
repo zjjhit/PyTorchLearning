@@ -289,26 +289,56 @@ class DSSMFour(nn.Module):
 
 
 class DSSMFive(DSSMFour):
+    """
+    不同层 不同学习率,不做级联
+    """
+
     def __init__(self, config, device='cpu', vocab=None):
-        # super(DSSMFive, self).__init__()
-        DSSMFour.__init__(self, config, device)
+        super(DSSMFive, self).__init__()
 
-        self.vocab = vocab
-        self.hidden_size = 7
+        # 此部分的信息有待处理
+        self.hidden_size = config.hidden_size  # 16
+        self.kernel_out = config.kernel_out_1  # 128
+        self.kernel_size = config.kernel_size  # 2
+        self.max_len = config.max_len  # 128
+
         self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size)
-        self.query_conv = nn.Conv1d(self.hidden_size, self.kernel_out, self.kernel_size)
-        tmp_ = self.__toBcode__()
-        self.embeddings.weight.data.copy_(tmp_)
-        self.embeddings.weight.requires_grad = False
 
-    def __toBcode__(self):
-        t_ = []
-        for char_ in self.vocab:
-            b_ = bin(int(self.vocab[char_]))[2:]
-            p_ = [int(k) for k in '0' * (7 - len(b_)) + b_]
-            t_.append(p_)
-        t_ = [t_[-1]] + t_[:-1]
-        return torch.tensor(t_)
+        #
+        self.convs = nn.Sequential(nn.Conv1d(in_channels=self.hidden_size,
+                                             out_channels=self.kernel_out,
+                                             kernel_size=self.kernel_size,  # 2
+                                             stride=2),
+                                   nn.LeakyReLU(),
+                                   nn.BatchNorm1d(self.kernel_out),  # B*L*D->B*D*L->B*Kout*((L-size)/stride+1)
+                                   # nn.MaxPool1d(2),  # -> B*Kout* || / 2
+                                   nn.Conv1d(in_channels=self.kernel_out,
+                                             out_channels=32,
+                                             kernel_size=2),
+                                   nn.LeakyReLU(),
+                                   nn.MaxPool1d(2),
+                                   nn.BatchNorm1d(32),
+                                   nn.Conv1d(in_channels=32,
+                                             out_channels=16,
+                                             kernel_size=8),
+                                   nn.LeakyReLU()  ## B * 16 * 2
+                                   )
+
+        self.fc = nn.Linear(in_features=64, out_features=2)
+
+    def forward(self, data):
+        q = self.embeddings(data['query_']).permute(0, 2, 1)
+        d = self.embeddings(data['doc_']).permute(0, 2, 1)  # 待匹配的两个句子
+
+        out_q = self.convs(q)
+        out_d = self.convs(d)
+
+        out_ = torch.cat((out_q, out_d), dim=1)  # B 16 4
+        # print(out_.shape)
+        b_, _, _ = out_.shape
+
+        out_ = out_.view(b_, -1)  # B 64
+        return self.fc(out_)
 
 
 class DSSMSix(nn.Module):

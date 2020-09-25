@@ -12,9 +12,10 @@ class DSSMCharDataset(Dataset):
     基于字符的 数据集合
     """
 
-    def __init__(self, dataset, vocab, max_len=128, model='train'):
+    def __init__(self, dataset, vocab, max_len=128, model='train', overturn=False):
         self.dataset = dataset
         self.max_len = max_len
+        self.overturn = overturn
         self.data_size = len(dataset)
         self.vocab = vocab
         self.model = model
@@ -68,6 +69,18 @@ class DSSMCharDataset(Dataset):
                 output['label_'] = torch.tensor(np.long(label_))  # torch.tensor(label_)
 
             self.DataDict[i] = output
+
+            if self.overturn == True:
+                output_turn = {
+                    'origin_': item['origin'],
+                    'query_': torch.tensor(doc_ids),
+                    'doc_': torch.tensor(query_ids)
+                }
+                if self.model == 'train':
+                    label_ = item['label']
+                    output_turn['label_'] = torch.tensor(np.long(label_))  # torch.tensor(label_)
+
+                self.DataDict[i + len(self.dataset)] = output_turn
 
     def __getitem__(self, item):
         return self.DataDict[item]
@@ -165,9 +178,6 @@ def makeTrainPosData(path):
     for k in train:
         fout.write(k + '\n')
     fout.close()
-
-
-import random
 
 
 def makeTrainNegData(path_data, data_len=500000, type_=0):
@@ -376,7 +386,6 @@ def makeTrainNegData(path_data, data_len=500000, type_=0):
     fout.close()
 
 
-import pandas as pd
 from sklearn.model_selection import train_test_split
 
 
@@ -420,6 +429,7 @@ def makeTrainData(pos_path, neg_path, neg_path_0=''):
     df = pd.DataFrame(columns=['origin', 'label'], data=test)
     df.to_csv(BASE_DATA_PATH + '/processed_test.csv', index=False)
 
+
 # makeTrainPosData('../data/train.data.loc')
 
 
@@ -427,3 +437,106 @@ def makeTrainData(pos_path, neg_path, neg_path_0=''):
 
 # makeTrainData('../data/data.train.pos', '../data/data.train.neg1', '../data/data.train.neg0')
 # vocab_build('../data/char.dict')
+
+from dssm.runData import isSameNew
+import pandas as pd
+
+
+def filterSen(sen_1):
+    """
+    对部分句子进行过滤
+    :param sen_1:
+    :return:
+    """
+    tmp_ = [k for k in sen_1.split(' ') if k not in filter_word]
+    return ' '.join(tmp_)
+
+
+def checkTrainData(path_):
+    """
+    验证训练集质量
+    :param path_:
+    :return:
+    """
+    # df = pd.DataFrame(columns=['origin', 'label'])
+    data_ = pd.read_csv(path_)
+
+    for i in range(len(data_)):
+        txt_ = data_.iloc[i]['origin'].split('\001\002')
+        lable_ = data_.iloc[i]['label']
+        # flag_, _ = isSame(txt_[0], txt_[1])
+        # info_ = [str(k) for k in _]
+        # if flag_ == 0 and lable_ == 0:
+        #     continue
+        # elif flag_ == 1 and lable_ == 1:
+        #     continue
+        # else:
+        #     print(data_.iloc[i]['origin'] + '\001\002' + str(data_.iloc[i]['label']) + '\t' + str(flag_) + '\t' + ' '.join(info_))
+
+        flags_ = isSameNew(txt_[0], txt_[1])
+        if flags_[1] + flags_[3] + flags_[5] < 0 and lable_ == 0:
+            if txt_[0] in txt_[1] or txt_[1] in txt_[0]:
+                continue
+            info_ = [str(k) for k in flags_]
+            print(data_.iloc[i]['origin'] + '\001\002' + str(data_.iloc[i]['label']) + '\t\t' + ' '.join(info_))
+
+
+# checkTrainData('../data/train.csv')
+
+import random
+
+
+def makeHQTrainData(path_csv, path_manua, path_fake):
+    '''
+    base the manua label data , make new HG  train data
+    :return:
+    '''
+
+    f_m = open(path_manua, 'r')
+    f_f = open(path_fake, 'r')
+    dic_manua = {one.rstrip().split('\t\t')[0].split('\002')[0]: one.rstrip().split('\t\t')[0].split('\002')[1] for one in
+                 f_m.readlines() if
+                 len(
+                     one.rstrip(
+
+                     ).split(
+                         '\t\t')) > 1}
+
+    dic_fake = {one.rstrip().split('\002')[0]: 1 for one in f_f.readlines()}
+
+    print('manua')
+
+    print('panda')
+    pos_ = set({})
+    neg_ = set({})
+    neg_manua_ = set({})
+    pos_manua_ = set({})
+
+    data_ = pd.read_csv(path_csv)
+    for i in range(len(data_)):
+        txt_ = data_.iloc[i]['origin']
+        lable_ = data_.iloc[i]['label']
+        if lable_ == 1:
+            neg_.add(txt_)
+        else:
+            d_ = txt_.split('\001\002')
+            if d_[0] in dic_manua and dic_manua[d_[0]] == d_[1]:
+                pos_manua_.add(txt_)
+            elif d_[0] not in dic_manua and d_[0] in dic_fake:
+                neg_manua_.add(txt_)
+            elif d_[0] not in dic_fake:
+                pos_.add(txt_)
+
+    print('pos {},neg {},pos_manua {},neg_manua {}'.format(len(pos_), len(neg_), len(pos_manua_), len(neg_manua_)))
+    print('\n'.join(list(neg_manua_)[:10]))
+
+    # make manua Train Data
+    train_pos_ = list(pos_manua_) + random.sample(list(pos_), 45000)
+    train_neg_ = list(neg_manua_) + random.sample(list(neg_), 45000)
+
+    df = pd.DataFrame(columns=['origin', 'label'])
+    df['origin'] = train_pos_ + train_neg_
+    df['label'] = [0] * len(train_pos_) + [1] * len(train_neg_)
+    df.to_csv(BASE_DATA_PATH + 'train_new.csv', index=False)
+
+# makeHQTrainData('../data/train.csv', '../manua.data.pos', '../fake.data.pos')

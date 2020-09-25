@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-#
 
+import os
+import sys
 import time
 
 from sklearn.model_selection import KFold
@@ -23,20 +25,18 @@ def saveModel(model, file_path):
 
 
 BASE_DATA_PATH = './data/'
-import os
-import sys
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
         config_path = sys.argv[1]
-        dataset = pd.read_csv(BASE_DATA_PATH + '/train.csv')  # processed_train.csv
-        vocab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
+        dataset = pd.read_csv(BASE_DATA_PATH + '/train_new.csv')  # processed_train.csv
     else:
+        BASE_DATA_PATH = '../data/'
         config_path = '../data/config.json_4'
         dataset = pd.read_csv('../data/tt.csv')  # processed_train.csv
-        vocab = pickle.load(open('../data/char2id.vocab', 'rb'))
 
     config = BertConfig.from_pretrained(config_path)
+    vocab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
 
     if '-1' not in config.gpu:
         os.environ["CUDA_VISIBLE_DEVICES"] = config.gpu
@@ -57,7 +57,7 @@ if __name__ == '__main__':
     kf = KFold(n_splits=15, shuffle=True)
     nums_ = config.nums
     for k, (train_index, val_index) in enumerate(kf.split(range(len(dataset)))):
-        if k > 2:
+        if k > 3:
             break
 
         train = dataset.iloc[train_index]
@@ -65,7 +65,7 @@ if __name__ == '__main__':
 
         print('Start train {} ford {}'.format(k, len(train)))
 
-        train_base = DSSMCharDataset(train, vocab, max_len=config.max_len)
+        train_base = DSSMCharDataset(train, vocab, max_len=config.max_len, overturn=config.overturn)
         val = DSSMCharDataset(val, vocab, max_len=config.max_len)
         val = DataLoader(val, batch_size=config.batch_size, num_workers=2)
 
@@ -101,17 +101,26 @@ if __name__ == '__main__':
                     print('para init', m.weight.shape, m.weight)
                     # nn.init.kaiming_normal_(m.weight, mode='fan_in')
 
-        # optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-2)
+        # for one in model.parameters():
+        #     print(one)
+
+        fc_params = list(map(id, model.fc.parameters()))
+        conv1d_params = filter(lambda p: id(p) not in fc_params, model.parameters())
+        params = [
+            {"params": model.fc.parameters(), "lr": 1e-2},
+            {"params": conv1d_params, "lr": 1e-3},
+        ]
+        optimizer = torch.optim.Adam(params, lr=1e-3)
+
+        # optimizer = optim.Adam([{'params': base_params},
+        #                         {'params': net.conv1.parameters(), 'lr': opt.lr * 10},
+        #                         {'params': net.conv2.parameters(), 'lr': opt.lr * 10}], lr=opt.lr, betas=(0.9, 0.999))
+
         best_loss = 100000
 
         model.train()
-        for n_ in range(nums_):
-
+        for n_ in range(nums_ + 1):
             train = DataLoader(train_base, batch_size=config.batch_size, shuffle=True)
-
-            # data_loader = tqdm.tqdm(enumerate(train),
-            #                         total=len(train))
 
             total_loss = 0
             for i, data_set in enumerate(train):
@@ -137,15 +146,13 @@ if __name__ == '__main__':
                 loss.backward()
                 optimizer.step()
 
-                # print('label,{},{}'.format(sum(data['label_']), len(data['label_'])))
-
                 if i % 500 == 0:
                     print('k ford and nums ,{} ,{},loss is {}'.format(n_, i, loss.data.item()))
                     for name, parms in model.named_parameters():
                         print('-->name:', name, '\t\t-->grad_requirs:', parms.requires_grad)
-                        if parms.requires_grad:
-                            print('--weight', torch.mean(parms.data),
-                                  '\t\t-->grad_value:', torch.mean(parms.grad), '\n')
+                    if parms.requires_grad:
+                        print('--weight', torch.mean(parms.data),
+                              '\t\t-->grad_value:', torch.mean(parms.grad), '\n')
                     print('\n\n')
 
                 total_loss += loss.data.item()
@@ -153,25 +160,3 @@ if __name__ == '__main__':
             print('total_loss ford and nums ,{} ,{},loss is {}'.format(k, n_, total_loss))
             if n_ % 100 == 0 and n_ > 0:
                 saveModel(model, BASE_DATA_PATH + '/final_model_{}_{}_{}ford.pt'.format(config.id, k, n_))
-
-            # if n_ % 10 == 0:
-            #     # with torch.no_grad():
-            #     model.eval()
-            #     data_loader = tqdm.tqdm(enumerate(val),
-            #                             total=len(val))
-            #     loss_val = 0
-            #     for ii, data_set in data_loader:
-            #         data = {key: value.to(device) for key, value in data_set.items() if key != 'origin_'}
-            #         y_pred = model(data)
-            #         b_, _ = y_pred.shape
-            #         if config.loss == 'bce':
-            #             a = criterion(y_pred.view(b_, -1), data['label_'].view(b_, -1))
-            #         else:
-            #             a = criterion(y_pred.view(b_, -1), data['label_'])
-            #         loss_val += a.item()
-            #
-            #     print('val_loss,best_los,{},{}'.format(loss_val, best_loss))
-            #     if best_loss > loss_val:
-            #         best_loss = loss_val
-            #         saveModel(model, BASE_DATA_PATH + '/best_model_{}_{}_ford.pt'.format(config.id, k))
-            #         print('Best val loss {},{},{},{}'.format(best_loss, config.id, k, time.asctime()))
