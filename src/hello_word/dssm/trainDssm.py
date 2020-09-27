@@ -32,7 +32,7 @@ if __name__ == '__main__':
         dataset = pd.read_csv(BASE_DATA_PATH + '/train_new.csv')  # processed_train.csv
     else:
         BASE_DATA_PATH = '../data/'
-        config_path = '../data/config.json_4'
+        config_path = '../data/config.json_7'
         dataset = pd.read_csv('../data/tt.csv')  # processed_train.csv
 
     config = BertConfig.from_pretrained(config_path)
@@ -54,7 +54,7 @@ if __name__ == '__main__':
 
     print('begin')
 
-    kf = KFold(n_splits=15, shuffle=True)
+    kf = KFold(n_splits=20, shuffle=True)
     nums_ = config.nums
     for k, (train_index, val_index) in enumerate(kf.split(range(len(dataset)))):
         if k > 3:
@@ -85,45 +85,41 @@ if __name__ == '__main__':
                 model = DSSMFour(config, device).to(device)
                 print('model_4')
             elif config.id == 5:
-                model = DSSMFive(config, device, vocab).to(device)
+                model = DSSMFive(config).to(device)
                 print('model_5')
             elif config.id == 6:
                 model = DSSMSix(config, device, vocab).to(device)
                 print('model_6')
             elif config.id == 7:
-                model = DSSMSeven(config, device, vocab).to(device)
-                print('model_')
+                model = DSSMSeven(config).to(device)
+                print('model_7')
 
             print('para init')
             for m in model.modules():
-                if isinstance(m, (nn.Conv1d)):
+                if isinstance(m, (nn.Conv1d, nn.Linear)):
                     nn.init.xavier_uniform_(m.weight)
                     print('para init', m.weight.shape, m.weight)
                     # nn.init.kaiming_normal_(m.weight, mode='fan_in')
 
-        # for one in model.parameters():
-        #     print(one)
+        # fc_params = list(map(id, model.fc.parameters()))
+        # conv1d_params = filter(lambda p: id(p) not in fc_params, model.parameters())
+        # params = [
+        #     {"params": model.fc.parameters(), "lr": 1e-2},
+        #     {"params": conv1d_params, "lr": 1e-3},
+        # ]
 
-        fc_params = list(map(id, model.fc.parameters()))
-        conv1d_params = filter(lambda p: id(p) not in fc_params, model.parameters())
-        params = [
-            {"params": model.fc.parameters(), "lr": 1e-2},
-            {"params": conv1d_params, "lr": 1e-3},
-        ]
-        optimizer = torch.optim.Adam(params, lr=1e-3)
-
-        # optimizer = optim.Adam([{'params': base_params},
-        #                         {'params': net.conv1.parameters(), 'lr': opt.lr * 10},
-        #                         {'params': net.conv2.parameters(), 'lr': opt.lr * 10}], lr=opt.lr, betas=(0.9, 0.999))
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3 * 2, amsgrad=True)
 
         best_loss = 100000
 
-        model.train()
         for n_ in range(nums_ + 1):
             train = DataLoader(train_base, batch_size=config.batch_size, shuffle=True)
 
             total_loss = 0
+            model.train()
+            print('num_train,P{}'.format(len(train)))
             for i, data_set in enumerate(train):
+
                 data = {key: value.to(device) for key, value in data_set.items() if key != 'origin_'}
 
                 optimizer.zero_grad()
@@ -131,11 +127,12 @@ if __name__ == '__main__':
                 y_pred = model(data)
                 b_, _ = y_pred.shape
 
-                if i % 1000 == 0:
-                    print(y_pred.data[0:5])
-
                 if config.loss == 'bce':
-                    loss = criterion(y_pred.view(b_, -1), data['label_'].view(b_, -1))
+                    tmp_ = torch.ones(b_).to(device).view(b_, -1) - data['label_'].view(b_, -1)
+                    y_target = torch.cat((tmp_, data['label_'].view(b_, -1).float()), dim=1)
+                    print(y_pred.shape, y_target.shape)
+                    loss = criterion(y_pred, y_target)
+                    # loss = criterion(y_pred.view(b_, -1), data['label_'].view(b_, -1))
                 elif config.loss == 'cross':
                     loss = criterion(y_pred, data['label_'])
                 else:
@@ -146,17 +143,47 @@ if __name__ == '__main__':
                 loss.backward()
                 optimizer.step()
 
-                if i % 500 == 0:
+                if i % 10 == 0:
+                    print(y_pred.data[0:5])
                     print('k ford and nums ,{} ,{},loss is {}'.format(n_, i, loss.data.item()))
                     for name, parms in model.named_parameters():
                         print('-->name:', name, '\t\t-->grad_requirs:', parms.requires_grad)
-                    if parms.requires_grad:
-                        print('--weight', torch.mean(parms.data),
-                              '\t\t-->grad_value:', torch.mean(parms.grad), '\n')
+                        if parms.requires_grad and parms.grad is not None:
+                            print('--weight', torch.mean(parms.data),
+                                  '\t\t-->grad_value:', torch.mean(parms.grad), '\n')
                     print('\n\n')
 
                 total_loss += loss.data.item()
 
+                if n_ > 0:
+
+                    with torch.no_grad():
+                        model.eval()
+
+                        loss_val = 0
+                        for v_, data_set in enumerate(val):
+                            data = {key: value.to(device) for key, value in data_set.items() if key != 'origin_'}
+                            v_pred = model(data)
+                            b_, _ = v_pred.shape
+
+                            if config.loss == 'bce':
+                                tmp_ = torch.ones(b_).to(device).view(b_, -1) - data['label_'].view(b_, -1)
+                                y_target = torch.cat((tmp_, data['label_'].view(b_, -1).float()), dim=1)
+                                loss = criterion(v_pred, y_target)
+                            elif config.loss == 'cross':
+                                loss = criterion(v_pred, data['label_'])
+                            else:
+                                tmp_ = torch.ones(b_).to(device).view(b_, -1) - data['label_'].view(b_, -1)
+                                y_target = torch.cat((tmp_, data['label_'].view(b_, -1).float()), dim=1)
+                                loss = criterion(v_pred, y_target)
+
+                            loss_val += loss
+
+                        if best_loss > loss_val:
+                            best_loss = loss_val
+                            saveModel(model, BASE_DATA_PATH + 'model/best_model_{}_{}_{}_{}_ford.pt'.format(config.id, k, n_, i))
+                            print('Best val loss _{}_{}_{}_{}'.format(best_loss, config.id, k, n_))
+
+                    model.train()
+
             print('total_loss ford and nums ,{} ,{},loss is {}'.format(k, n_, total_loss))
-            if n_ % 100 == 0 and n_ > 0:
-                saveModel(model, BASE_DATA_PATH + '/final_model_{}_{}_{}ford.pt'.format(config.id, k, n_))

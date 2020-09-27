@@ -245,7 +245,7 @@ class DSSMFour(nn.Module):
         # nn.MaxPool1d(kernel_size=self.max_len + 1))]))
 
         self.learn_gamma = nn.Conv1d(32, 16, 32)
-        self.lrelu = nn.CELU()
+        self.lrelu = nn.LeakyReLU()
         self.norm = nn.BatchNorm1d(16)
         self.fc = nn.Linear(in_features=16, out_features=2)
 
@@ -288,12 +288,12 @@ class DSSMFour(nn.Module):
         # return with_gamma
 
 
-class DSSMFive(DSSMFour):
+class DSSMFive(nn.Module):
     """
     不同层 不同学习率,不做级联
     """
 
-    def __init__(self, config, device='cpu', vocab=None):
+    def __init__(self, config):
         super(DSSMFive, self).__init__()
 
         # 此部分的信息有待处理
@@ -305,40 +305,74 @@ class DSSMFive(DSSMFour):
         self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size)
 
         #
-        self.convs = nn.Sequential(nn.Conv1d(in_channels=self.hidden_size,
-                                             out_channels=self.kernel_out,
-                                             kernel_size=self.kernel_size,  # 2
-                                             stride=2),
-                                   nn.LeakyReLU(),
-                                   nn.BatchNorm1d(self.kernel_out),  # B*L*D->B*D*L->B*Kout*((L-size)/stride+1)
-                                   # nn.MaxPool1d(2),  # -> B*Kout* || / 2
-                                   nn.Conv1d(in_channels=self.kernel_out,
-                                             out_channels=32,
-                                             kernel_size=2),
-                                   nn.LeakyReLU(),
-                                   nn.MaxPool1d(2),
-                                   nn.BatchNorm1d(32),
-                                   nn.Conv1d(in_channels=32,
-                                             out_channels=16,
-                                             kernel_size=8),
-                                   nn.LeakyReLU()  ## B * 16 * 2
-                                   )
+        self.convs_left = nn.Sequential(nn.Conv1d(in_channels=self.hidden_size,
+                                                  out_channels=self.kernel_out,
+                                                  kernel_size=self.kernel_size,  # 2
+                                                  stride=2),
+                                        nn.LeakyReLU(),
+                                        nn.BatchNorm1d(self.kernel_out),  # B*L*D->B*D*L->B*Kout*((L-size)/stride+1)
+                                        # nn.MaxPool1d(2),  # -> B*Kout* || / 2
+                                        nn.Conv1d(in_channels=self.kernel_out,
+                                                  out_channels=32,
+                                                  kernel_size=2),
+                                        nn.LeakyReLU(),
+                                        nn.MaxPool1d(2),
+                                        nn.BatchNorm1d(32),
+                                        nn.Conv1d(in_channels=32,
+                                                  out_channels=8,
+                                                  kernel_size=8),
+                                        nn.LeakyReLU()  ## B * 16 * 2
+                                        )
+        # self.convs_right = nn.Sequential(nn.Conv1d(in_channels=self.hidden_size,
+        #                                            out_channels=self.kernel_out,
+        #                                            kernel_size=self.kernel_size,  # 2
+        #                                            stride=2),
+        #                                  nn.LeakyReLU(),
+        #                                  nn.BatchNorm1d(self.kernel_out),  # B*L*D->B*D*L->B*Kout*((L-size)/stride+1)
+        #                                  # nn.MaxPool1d(2),  # -> B*Kout* || / 2
+        #                                  nn.Conv1d(in_channels=self.kernel_out,
+        #                                            out_channels=32,
+        #                                            kernel_size=2),
+        #                                  nn.LeakyReLU(),
+        #                                  nn.MaxPool1d(2),
+        #                                  nn.BatchNorm1d(32),
+        #                                  nn.Conv1d(in_channels=32,
+        #                                            out_channels=8,
+        #                                            kernel_size=8),
+        #                                  nn.LeakyReLU()  ## B * 8* 8
+        #                                  )
 
-        self.fc = nn.Linear(in_features=64, out_features=2)
+        self.convs_ = nn.Sequential(nn.Conv1d(in_channels=16,
+                                              out_channels=8,
+                                              kernel_size=2,
+                                              stride=2),  # B 8 4
+                                    nn.LeakyReLU(),
+                                    nn.Conv1d(in_channels=8,
+                                              out_channels=4,
+                                              kernel_size=2,
+                                              stride=2),  # B 4 2
+                                    nn.LeakyReLU(),
+                                    nn.BatchNorm1d(4),
+                                    )
+        self.fc_1 = nn.Linear(in_features=8, out_features=2)
+        # self.relu_1 = nn.LeakyReLU()
+        # self.fc_2 = nn.Linear(in_features=32, out_features=2)
 
     def forward(self, data):
         q = self.embeddings(data['query_']).permute(0, 2, 1)
         d = self.embeddings(data['doc_']).permute(0, 2, 1)  # 待匹配的两个句子
 
-        out_q = self.convs(q)
-        out_d = self.convs(d)
-
-        out_ = torch.cat((out_q, out_d), dim=1)  # B 16 4
+        out_q = self.convs_left(q)
+        out_d = self.convs_left(d)
+        # print(out_d.shape)
+        out_ = torch.cat((out_q, out_d), dim=1)  # B 16 8
         # print(out_.shape)
-        b_, _, _ = out_.shape
 
-        out_ = out_.view(b_, -1)  # B 64
-        return self.fc(out_)
+        out_ = self.convs_(out_)
+        b_, _, _ = out_.shape
+        # print(out_.shape)
+
+        return self.fc_1(out_.view(b_, -1))
 
 
 class DSSMSix(nn.Module):
@@ -402,63 +436,37 @@ class DSSMSix(nn.Module):
         return with_gamma
 
 
-class DSSMSeven(nn.Module):
+class DSSMSeven(DSSMFour):
+    """
+    数据需要调换
+    """
 
-    def __init__(self, config, device='cpu', vocab=None):
+    def __init__(self, config, device='cpu'):
         # super(DSSMThree, self).__init__()
-        super(DSSMSeven, self).__init__()
+        super(DSSMSeven, self).__init__(config, device)
 
-        self.device = device
-        ###此部分的信息有待处理
-
-        # self.embeddings.to(self.device)  ###????
-        self.vocab = vocab
-        self.latent_out = config.latent_out_1
-        self.hidden_size = config.hidden_size
-        self.kernel_out = config.kernel_out_1
-        self.kernel_size = config.kernel_size
-        self.max_len = config.max_len
-        self.kmax = config.kmax
-
-        self.hidden_size = 7
-        self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size)
-
-        # layers for docs
-        self.doc_sem = nn.Linear(self.max_len * self.hidden_size, self.latent_out)
-        # learning gamma
-        self.learn_gamma = nn.Linear(self.latent_out, 2)
-        self.soft = nn.Softmax(dim=1)
-
-        tmp_ = self.__toBcode__()
-        self.embeddings.weight.data.copy_(tmp_)
-        self.embeddings.weight.requires_grad = False
-
-    def __toBcode__(self):
-        t_ = []
-        for char_ in self.vocab:
-            b_ = bin(int(self.vocab[char_]))[2:]
-            p_ = [int(k) for k in '0' * (7 - len(b_)) + b_]
-            t_.append(p_)
-        t_ = [t_[-1]] + t_[:-1]
-        return torch.tensor(t_)
+        self.fc_s1 = nn.Linear(16, 4)
+        # self.norm_s1 = nn.BatchNorm1d(16)
+        self.fc_s2 = nn.Linear(4, 2)
 
     def forward(self, data):
-        q = self.embeddings(data['query_'])
-        d = self.embeddings(data['doc_'])
+        q = self.embeddings(data['query_']).permute(0, 2, 1)
+        d = self.embeddings(data['doc_']).permute(0, 2, 1)  # 待匹配的两个句子
 
-        b_, l_, d_ = q.shape
-        q = q.view(b_, -1)
-        d = d.view(b_, -1)
+        out_q = self.convs(q)
+        out_d = self.convs(d)  ### B 16 32
+        # print(out_d.shape)
+        # out_ = out_q - out_d
 
-        ### query
-        q_s = F.relu(self.doc_sem(q))
+        out_ = torch.cat((out_q, out_d), dim=1)  # B 32 32
+        out_ = self.learn_gamma(out_)  # B 16 1
+        out_ = self.lrelu(out_)
 
-        ###doc
-        d_s = F.relu(self.doc_sem(d))
+        b_, _, _ = out_q.shape
+        # out_ = torch.cat((out_d.view(b_, -1), out_q.view(b_, -1)), 1)
 
-        ###双塔结构向量拼接
-        # out_ = torch.cat((q_s, d_s), 1)
-        out_ = q_s - d_s
+        out_ = self.fc_s2(self.fc_s1(out_.view(b_, -1)))
 
-        with_gamma = self.soft(self.learn_gamma(out_))  ### --> B * 2)
-        return with_gamma
+        # out_ = self.fc_s2(out_)
+
+        return out_

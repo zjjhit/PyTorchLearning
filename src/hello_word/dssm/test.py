@@ -9,7 +9,6 @@
 
 import os
 
-import pandas as pd
 ######################################
 from torch.utils.data import DataLoader
 
@@ -33,9 +32,10 @@ def test():
     data_base = DSSMCharDataset(dataset, vacab, max_len=64)  # same with the config_4
     data = DataLoader(data_base, batch_size=100)
 
-    model = torch.load(BASE_DATA_PATH + '/final_model_4_0_400ford.pt').to(device)
+    model = torch.load(BASE_DATA_PATH + 'model/best_model_7_0_6_75_ford.pt').to(device)
 
     with torch.no_grad():
+        num_ = []
         for i, data_ in enumerate(data):
             y_pred = model(data_)
             b_, _ = y_pred.shape
@@ -51,10 +51,18 @@ def test():
             # print(label_)
             acc_ = sum(k_ == label_)
 
+            num_.append(float(acc_.item()) / b_)
             # print(org_)
             print(acc_.item(), b_, float(acc_.item()) / b_)
 
-    # print(model.embeddings.weight)
+            for ii, d_ in enumerate(tmp_):
+                if d_[2] != d_[3]:
+                    print(org_[ii], label_[ii], tmp_[ii])
+                if tmp_[ii][0] * tmp_[ii][1] > 0:
+                    print('Test , {} {}'.format(org_[ii], tmp_[ii]))
+        # print(model.embeddings.weight)
+
+        print(num_, sum(num_) / len(num_))
 
 
 if __name__ == '__main__':

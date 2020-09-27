@@ -56,39 +56,7 @@ def distance_tf(s1, s2):
 
 
 # ================================================================================================
-filter_word = set(
-    {'LTD', 'CO.,LTD', 'LIMITED', 'LTD.', 'CO', 'CO.,LTD.', 'CO.LTD', 'COMPANY', 'GROUP', 'INC.', 'CO.LTD.', 'CO.',
-     'CO.,', 'CO.,',
-     'LIMITED', 'LIMITED.', 'LTD,', 'LTD.,', 'LIMITE', '.,LTD', ',LTD', 'LTD.', 'LLC.', 'CO..LTD.', 'CO.,LIMITED'})
 
-
-def preprocessData(path_):
-    """
-
-    :param path_:
-    :return:
-    """
-    id2sentence = {}  # id-> sentence,flag_
-    word2sentenceid = {}  # word->sentenceid
-    cluster2set = {}  ## sentenceid --> sameSet
-    num_ = 0
-    with open(path_, 'r') as f:
-        for one in f:
-            tmp_ = one.rstrip().split('\001\002')
-            if len(tmp_) != 5 or tmp_[-2] == 'NULL':
-                continue
-            for k in tmp_[-2].split():
-                if k not in filter_word:
-                    if k not in word2sentenceid:
-                        word2sentenceid[k] = set({num_})
-                    else:
-                        word2sentenceid[k].add(num_)
-
-            id2sentence[num_] = [tmp_[-2], False]  # 暂时不使用 list
-            cluster2set[num_] = False
-            num_ += 1
-
-    return id2sentence, word2sentenceid, cluster2set
 
 
 def isSame(s1, s2):
@@ -205,157 +173,6 @@ def isSameNew(s1, s2):
     return edt, edt_dis, tf, tf_dis, jaca, jaca_dis
 
 
-def processSet(sen_set, id2sentence):
-    """
-    处理set集合，获取子聚类类别
-    :param sen_set:
-    :return:
-    """
-    tmp_list = list(sen_set)
-    set_list = []
-    while len(tmp_list) >= 1:
-        a = tmp_list[0]
-        a_set = set({a})
-
-        flag_ = []
-        for k in range(1, len(tmp_list[1:])):
-            if isSame(id2sentence[a][0], id2sentence[tmp_list[k]][0]):
-                flag_.append(tmp_list[k])
-                a_set.add(tmp_list[k])
-
-        flag_.append(a)
-        for one in flag_:
-            tmp_list.remove(one)
-
-        set_list.append(a_set)
-
-    return set_list
-
-
-def processCluster(set_list, cluster_set, info_=''):
-    """
-    针对word2set的计算结果，更新cluster2set
-    :param set_list:
-    :param cluster_set: sentenceid --> ???
-    :return:
-    """
-    for tmp_ in set_list:
-        for id_ in tmp_:
-            if not cluster_set[id_]:
-                cluster_set[id_] = [tmp_]
-            else:
-                # print(cluster_set[id_], tmp_)
-                flag_ = 0
-                for i in range(len(cluster_set[id_])):
-                    if len(cluster_set[id_][i] & tmp_) * 2 >= min(len(tmp_), len(cluster_set[id_][i])):
-                        cluster_set[id_][i] = cluster_set[id_][i] | tmp_
-                        flag_ = 1
-                        break
-                if flag_ == 0:
-                    cluster_set[id_].append(tmp_)
-
-    print(BASE_PATH + 'cluster.{}.pk'.format(info_))
-    pickleDumpFile(BASE_PATH + 'cluster.{}.pk'.format(info_), cluster_set)
-    return BASE_PATH + 'cluster.{}.pk'.format(info_)
-
-
-BASE_PATH = '../cluster/'
-import pickle
-
-
-def pickleDumpFile(pickname, *awks):
-    with open(BASE_PATH + '/' + pickname, 'wb') as f:
-        for k in awks:
-            pickle.dump(k, f)
-
-
-def runCluster(path_, info_=''):
-    id2sentence, word2sentenceid, cluster2set = preprocessData(path_)
-    pickleDumpFile('baseDicta.pk', id2sentence, word2sentenceid, cluster2set)
-
-    # for word in word2sentenceid:
-    #     word_ssen_et = word2sentenceid[word]
-    #     set_list = processSet(word_ssen_et, id2sentence)
-    #     processCluster(set_list, cluster2set)
-
-
-# =============================================================================
-
-import multiprocessing
-import copy
-
-
-def arr_size(arr, size_):
-    s = []
-    for i in range(0, int(len(arr)), size_):
-        l_ = min(i + size_, len(arr))
-        c = arr[i:l_]
-        if c != []:
-            s.append(c)
-    return s
-
-
-def func(word_list, word2sentenceid, id2sentence, cluster2set, info):
-    for i, word in enumerate(word_list):
-        word_ssen_et = word2sentenceid[word]
-        if len(word_ssen_et) > 15:
-            continue
-        print(i, info, word)
-        set_list = processSet(word_ssen_et, id2sentence)
-    return processCluster(set_list, cluster2set, str(info))
-
-
-# import multiprocessing.Process as Process
-
-import random
-
-
-def multiRun():
-    process_num = 3
-    with open(BASE_PATH + '/baseDict.pk', 'rb') as f:
-        id2sentence = pickle.load(f)
-        word2sentenceid = pickle.load(f)
-        cluster2set = pickle.load(f)
-
-    word_list = random.sample(list(word2sentenceid.keys()), 30000)
-    wordlist_len = int(len(word_list) / process_num)
-
-    w_list = arr_size(word_list, 20)
-    print('w_list', len(w_list), len(word_list))
-
-    pool = multiprocessing.Pool(processes=process_num + 2)
-    result_ = []
-    for i in range(process_num):
-        msg = "run %d" % (i)
-        print(msg, len(w_list[i]))
-        c_cluster2set = copy.deepcopy(cluster2set)
-        c_word2sentenceid = copy.deepcopy(word2sentenceid)
-        c_id2sentence = copy.deepcopy(id2sentence)
-
-        result_.append(pool.apply_async(func, args=(w_list[i], c_word2sentenceid, c_id2sentence, c_cluster2set, i,)))
-
-    pool.close()
-    pool.join()
-
-    for k in result_:
-        print(k.get())
-
-    # ps = []
-    # for i in range(process_num):
-    #     msg = "run %d" % (i)
-    #     print(msg, len(w_list[i]))
-    #     c_cluster2set = copy.deepcopy(cluster2set)
-    #     c_word2sentenceid = copy.deepcopy(word2sentenceid)
-    #     c_id2sentence = copy.deepcopy(id2sentence)
-    #
-    #     p = Process(target=func, name="worker" + str(i), args=(w_list[i], c_word2sentenceid, c_id2sentence, c_cluster2set, i))
-    #     ps.append(p)
-    #
-    # for i in range(process_num):
-    #     ps[i].start()
-    #
-    # for i in range(process_num):
-    #     ps[i].join()
 
 
 # ===============================================================================================
@@ -510,15 +327,16 @@ def writeExcel(path_):
 
 ######################################
 
-import os, torch
+import torch
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-device = 'cpu'
-BASE_DATA_PATH = '../data/'
-vacab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
-model = torch.load(BASE_DATA_PATH + '/final_model_4_0_400ford.pt').to(device)
-model.eval()
-max_len = 64
+
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# device = 'cpu'
+# BASE_DATA_PATH = '../data/'
+# vacab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
+# model = torch.load(BASE_DATA_PATH + '/final_model_4_0_400ford.pt').to(device)
+# model.eval()
+# max_len = 64
 
 
 def convert_tokens_to_ids(query, vocab):
@@ -614,6 +432,29 @@ def XXC(path_):
     df.to_excel('sample.xlsx')
 
 
+def dealPosition(path_):
+    '''
+    处理 位置信息， 是否可以作为辅助信息 帮助聚类
+    :param path_:
+    :return:
+    '''
+
+    dic_ = {}
+    with open(path_, 'r') as f:
+        for one in f:
+            tmp_ = one.rstrip().split('\001\002')
+            if len(tmp_) != 5:
+                continue
+
+            if tmp_[3] not in dic_:
+                dic_[tmp_[3]] = set({tmp_[4]})
+            else:
+                dic_[tmp_[3]].add(tmp_[4])
+
+    for k in dic_:
+        print(k + '\001\002' + '\002'.join(list(dic_[k])))
+
+
 if __name__ == '__main__':
     pass
     # multiRun()
@@ -622,8 +463,4 @@ if __name__ == '__main__':
     # pianMen()
     # writeExcel('tmp_result')
     # XXC('tmp_result')
-    a = 'DONGGUAN CARNIVAL IMPORT & EXPORT TRADING CO., LTD.'
-    b = 'QUANZHOU CARNIVAL BAGS & SUITCASES CO.,LTD'
-    print(singleOne(a, b))
-    print(isSame(a, b))
-    print(distance_edit(a, b))
+    # dealPosition('../data/data.log')
