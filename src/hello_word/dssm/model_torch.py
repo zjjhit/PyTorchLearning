@@ -297,82 +297,71 @@ class DSSMFive(nn.Module):
         super(DSSMFive, self).__init__()
 
         # 此部分的信息有待处理
-        self.hidden_size = config.hidden_size  # 16
-        self.kernel_out = config.kernel_out_1  # 128
-        self.kernel_size = config.kernel_size  # 2
-        self.max_len = config.max_len  # 128
+        self.hidden_size = config.hidden_size  #
+        self.kernel_out = config.kernel_out_1  # 32
+        self.kernel_size = config.kernel_size  # 1
+        self.max_len = config.max_len  # 96
 
         self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size)
 
-        #
-        self.convs_left = nn.Sequential(nn.Conv1d(in_channels=self.hidden_size,
-                                                  out_channels=self.kernel_out,
-                                                  kernel_size=self.kernel_size,  # 2
-                                                  stride=2),
-                                        nn.LeakyReLU(),
-                                        nn.BatchNorm1d(self.kernel_out),  # B*L*D->B*D*L->B*Kout*((L-size)/stride+1)
-                                        # nn.MaxPool1d(2),  # -> B*Kout* || / 2
-                                        nn.Conv1d(in_channels=self.kernel_out,
-                                                  out_channels=32,
-                                                  kernel_size=2),
-                                        nn.LeakyReLU(),
-                                        nn.MaxPool1d(2),
-                                        nn.BatchNorm1d(32),
-                                        nn.Conv1d(in_channels=32,
-                                                  out_channels=8,
-                                                  kernel_size=8),
-                                        nn.LeakyReLU()  ## B * 16 * 2
-                                        )
-        # self.convs_right = nn.Sequential(nn.Conv1d(in_channels=self.hidden_size,
-        #                                            out_channels=self.kernel_out,
-        #                                            kernel_size=self.kernel_size,  # 2
-        #                                            stride=2),
-        #                                  nn.LeakyReLU(),
-        #                                  nn.BatchNorm1d(self.kernel_out),  # B*L*D->B*D*L->B*Kout*((L-size)/stride+1)
-        #                                  # nn.MaxPool1d(2),  # -> B*Kout* || / 2
-        #                                  nn.Conv1d(in_channels=self.kernel_out,
-        #                                            out_channels=32,
-        #                                            kernel_size=2),
-        #                                  nn.LeakyReLU(),
-        #                                  nn.MaxPool1d(2),
-        #                                  nn.BatchNorm1d(32),
-        #                                  nn.Conv1d(in_channels=32,
-        #                                            out_channels=8,
-        #                                            kernel_size=8),
-        #                                  nn.LeakyReLU()  ## B * 8* 8
-        #                                  )
+        self.convs = nn.Sequential(nn.Conv1d(in_channels=self.hidden_size,
+                                             out_channels=self.kernel_out,
+                                             kernel_size=3,  # 2
+                                             stride=3),
+                                   nn.LeakyReLU(),  # B 32 32
+                                   nn.BatchNorm1d(self.kernel_out),  # B*L*D->B*D*L->B*Kout*((L-size)/stride+1)
+                                   # nn.MaxPool1d(2),  # -> B*Kout* || / 2
+                                   nn.Conv1d(in_channels=self.kernel_out,
+                                             out_channels=32,
+                                             kernel_size=2,
+                                             stride=2),
+                                   nn.LeakyReLU(),  ## B 32 16
+                                   nn.MaxPool1d(2),  ## B 32 8
+                                   nn.BatchNorm1d(32),
+                                   nn.Conv1d(in_channels=32,
+                                             out_channels=8,
+                                             kernel_size=2,
+                                             stride=2),
+                                   nn.LeakyReLU()  ## B * 8 * 4
+                                   )
 
-        self.convs_ = nn.Sequential(nn.Conv1d(in_channels=16,
-                                              out_channels=8,
-                                              kernel_size=2,
-                                              stride=2),  # B 8 4
-                                    nn.LeakyReLU(),
-                                    nn.Conv1d(in_channels=8,
-                                              out_channels=4,
-                                              kernel_size=2,
-                                              stride=2),  # B 4 2
-                                    nn.LeakyReLU(),
-                                    nn.BatchNorm1d(4),
-                                    )
-        self.fc_1 = nn.Linear(in_features=8, out_features=2)
-        # self.relu_1 = nn.LeakyReLU()
-        # self.fc_2 = nn.Linear(in_features=32, out_features=2)
+        self.convs_attention = nn.Sequential(nn.Conv1d(in_channels=config.max_len,
+                                                       out_channels=32,
+                                                       kernel_size=3,
+                                                       stride=3),  # B 32 (max_len - ksize ) / stride + 1 : B 32 32
+                                             nn.LeakyReLU(),
+                                             nn.Conv1d(in_channels=32,
+                                                       out_channels=8,
+                                                       kernel_size=4,
+                                                       stride=4),  # B 16 8
+                                             nn.LeakyReLU(),
+                                             nn.BatchNorm1d(8),
+                                             )
+        # (B 8 4) * 2 + (B 8 8)
+        self.fc_1 = nn.Linear(in_features=128, out_features=16)
+        self.relu_1 = nn.LeakyReLU()
+        self.fc_2 = nn.Linear(in_features=16, out_features=2)
 
     def forward(self, data):
-        q = self.embeddings(data['query_']).permute(0, 2, 1)
-        d = self.embeddings(data['doc_']).permute(0, 2, 1)  # 待匹配的两个句子
+        q = self.embeddings(data['query_'])
+        d = self.embeddings(data['doc_'])
+        att_ = torch.matmul(q, d.transpose(-1, -2))
 
-        out_q = self.convs_left(q)
-        out_d = self.convs_left(d)
-        # print(out_d.shape)
-        out_ = torch.cat((out_q, out_d), dim=1)  # B 16 8
-        # print(out_.shape)
+        q = q.permute(0, 2, 1)
+        d = d.permute(0, 2, 1)  # 待匹配的两个句子
 
-        out_ = self.convs_(out_)
-        b_, _, _ = out_.shape
-        # print(out_.shape)
+        out_q = self.convs(q)
+        out_d = self.convs(d)
+        out_att = self.convs_attention(att_)
+        b_, _, _ = out_q.shape
+        # print(out_q.shape, out_att.shape)
 
-        return self.fc_1(out_.view(b_, -1))
+        out_ = torch.cat((out_q.view(b_, -1), out_d.view(b_, -1), out_att.view(b_, -1)), dim=1)  # B 16 8
+
+        out_ = self.relu_1(self.fc_1(out_.view(b_, -1)))
+        out_ = self.fc_2(out_)
+
+        return out_
 
 
 class DSSMSix(nn.Module):

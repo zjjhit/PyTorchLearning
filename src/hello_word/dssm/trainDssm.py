@@ -32,7 +32,7 @@ if __name__ == '__main__':
         dataset = pd.read_csv(BASE_DATA_PATH + '/train_new.csv')  # processed_train.csv
     else:
         BASE_DATA_PATH = '../data/'
-        config_path = '../data/config.json_7'
+        config_path = '../data/config.json_5'
         dataset = pd.read_csv('../data/tt.csv')  # processed_train.csv
 
     config = BertConfig.from_pretrained(config_path)
@@ -181,7 +181,8 @@ if __name__ == '__main__':
 
                         if best_loss > loss_val:
                             best_loss = loss_val
-                            saveModel(model, BASE_DATA_PATH + 'model/best_model_{}_{}_{}_{}_ford.pt'.format(config.id, k, n_, i))
+                            saveModel(model, BASE_DATA_PATH + 'model/{}_best_model_{}_{}_{}_{}_ford.pt'.format(
+                                config.pre_info, config.id, k, n_, i))
                             print('Best val loss _{}_{}_{}_{}'.format(best_loss, config.id, k, n_))
 
                     model.train()

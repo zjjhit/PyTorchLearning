@@ -23,7 +23,7 @@ class DSSMCharDataset(Dataset):
         self.__preData__()
 
     def __len__(self):
-        return self.data_size
+        return len(self.DataDict)
 
     def convert_tokens_to_ids(self, query):
         ids_ = []

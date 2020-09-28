@@ -32,7 +32,7 @@ def test():
     data_base = DSSMCharDataset(dataset, vacab, max_len=64)  # same with the config_4
     data = DataLoader(data_base, batch_size=100)
 
-    model = torch.load(BASE_DATA_PATH + 'model/best_model_7_0_6_75_ford.pt').to(device)
+    model = torch.load(BASE_DATA_PATH + 'model/best_model_7_0_10_176_ford.pt').to(device)
 
     with torch.no_grad():
         num_ = []

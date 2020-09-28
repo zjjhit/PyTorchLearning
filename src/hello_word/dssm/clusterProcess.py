@@ -61,9 +61,21 @@ def pickleDumpFile(pickname, *awks):
             pickle.dump(k, f)
 
 
-def getDictData(path_, info_=''):
+def makeDictData(path_, info_=''):
     id2sentence, word2sentenceid, cluster2set = preprocessData(path_)
     pickleDumpFile('baseDictData.pk', id2sentence, word2sentenceid, cluster2set)
+
+
+def infoSense(path_):
+    with open(path_, 'rb') as f:
+        id2sentence = pickle.load(f)
+        word2sentenceid = pickle.load(f)
+        cluster2set = pickle.load(f)
+
+        fout = open('./tmp.info', 'w')
+        for k in word2sentenceid:
+            fout.write('{}-->{}\n'.format(k, len(word2sentenceid[k])))
+        fout.close()
 
 
 ###########################################################################################
@@ -158,8 +170,6 @@ def func(word_list, word2sentenceid, id2sentence, cluster2set, info):
 
 # import multiprocessing.Process as Process
 
-import random
-
 
 def multiRun():
     process_num = 3
@@ -192,5 +202,56 @@ def multiRun():
         print(k.get())
 
 
+#############TMP######
+import random
+import pandas as pd
+from dssm.runData import isSameNew
+
+
+def makePosTestData(path_):
+    """
+    构建地点信息数据集，用于测试 基于名称的模型效果
+    :param path_:
+    :return:
+    """
+
+    dic_ = {}
+    pos_ = []
+    num_ = 20000
+    with open(path_, 'r')  as f:
+        for one in f:
+            tmp_ = one.rstrip()
+            if len(tmp_) < 3:
+                continue
+            tmp_ = tmp_.split('\001\002')
+            loc_ = [k for k in tmp_[1].split('\002') if k != 'NULL' and len(k) > 5]
+            if len(loc_) < 1:
+                continue
+            if len(loc_) > 5 and num_ > 0:
+                t_ = random.sample(loc_, 2)
+                flags_ = isSameNew(t_[0], t_[1])
+                if flags_[1] * flags_[3] * flags_[5] > 0:
+                    # if distance_jacaard(t_[0], t_[1]) > 0.5:
+                    pos_.append('\001\002'.join(t_))
+                    num_ -= 1
+            dic_[tmp_[0]] = loc_
+
+    neg_ = []
+    key_list = dic_.keys()
+    while num_ < 20000:
+        tmp_ = random.sample(key_list, 2)
+        if dic_[tmp_[0]][0] != dic_[tmp_[1]][0] and len(dic_[tmp_[0]][0]) > 10 and len(dic_[tmp_[1]][0]) > 10:
+            neg_.append(dic_[tmp_[0]][0] + "\001\002" + dic_[tmp_[1]][0])
+            num_ += 1
+
+    df = pd.DataFrame(columns=['origin', 'label'])
+    df['origin'] = pos_ + neg_
+    df['label'] = [0] * len(pos_) + [1] * len(neg_)
+    df.to_csv('../data/train_loc.csv', index=False)
+
+
 if __name__ == '__main__':
     pass
+    # makeDictData('../data/data.log')
+    # infoSense(BASE_PATH + '/baseDictData.pk')
+    makePosTestData('../data/posi.data')

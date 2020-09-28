@@ -111,6 +111,10 @@ def isSame(s1, s2):
 
 import math
 
+filter_word = set(
+    {'LTD', 'CO.,LTD', 'LIMITED', 'LTD.', 'CO', 'CO.,LTD.', 'CO.LTD', 'COMPANY', 'GROUP', 'INC.', 'CO.LTD.', 'CO.',
+     'CO.,', 'CO.,',
+     'LIMITED', 'LIMITED.', 'LTD,', 'LTD.,', 'LIMITE', '.,LTD', ',LTD', 'LTD.', 'LLC.', 'CO..LTD.', 'CO.,LIMITED'})
 
 def isSameNew(s1, s2):
     threshold_ = {'tf': {0: {'mean': 0.692, 'var': 0.024, 'std_var': 0.156},
@@ -177,6 +181,7 @@ def isSameNew(s1, s2):
 
 # ===============================================================================================
 import numpy as np
+import pickle
 
 
 def getThreshold(path_):
