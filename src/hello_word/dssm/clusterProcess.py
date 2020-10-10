@@ -16,6 +16,17 @@
 '''
 
 # ========================
+import sys
+
+if len(sys.argv) == 2:
+    BASE_PATH = './cluster/'
+    BASE_DATA_PATH = './data/'
+else:
+    BASE_PATH = '../cluster/'
+    BASE_DATA_PATH = '../data/'
+
+import pickle
+
 filter_word = set(
     {'LTD', 'CO.,LTD', 'LIMITED', 'LTD.', 'CO', 'CO.,LTD.', 'CO.LTD', 'COMPANY', 'GROUP', 'INC.', 'CO.LTD.', 'CO.',
      'CO.,', 'CO.,',
@@ -44,15 +55,11 @@ def preprocessData(path_):
                     else:
                         word2sentenceid[k].add(num_)
 
-            id2sentence[num_] = tmp_[-2]  # 暂时不使用 list
+            id2sentence[num_] = [tmp_[-2], tmp_[-1]]  # 暂时不使用 list
             cluster2set[num_] = False
             num_ += 1
 
     return id2sentence, word2sentenceid, cluster2set
-
-
-BASE_PATH = '../cluster/'
-import pickle
 
 
 def pickleDumpFile(pickname, *awks):
@@ -66,24 +73,182 @@ def makeDictData(path_, info_=''):
     pickleDumpFile('baseDictData.pk', id2sentence, word2sentenceid, cluster2set)
 
 
+import os, torch
+from transformers import BertConfig
+
+
+def model_init():
+    model_path = BASE_DATA_PATH + '/use_model/'
+    conf = BertConfig.from_pretrained(model_path + '/' + 'init.json')
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = conf.gpu_id
+    device = 'cpu'
+
+    char_vocab = pickle.load(open(model_path + conf.char_vocab, 'rb'))
+    model_name_char_1 = torch.load(model_path + conf.model_name_char_1).to(device)
+    model_name_char_1.eval()
+
+    model_name_char_2 = torch.load(model_path + conf.model_name_char_2).to(device)
+    model_name_char_2.eval()
+
+    word_vocab = pickle.load(open(model_path + conf.word_vocab, 'rb'))
+    model_name_word = torch.load(model_path + conf.model_name_word).to(device)
+    model_name_word.eval()
+
+    model_loc = torch.load(model_path + conf.model_loc).to(device)
+    model_loc.eval()
+
+    max_len = conf.max_len
+
+    model_dict = {
+        'name_char_1': model_name_char_1,
+        'name_char_2': model_name_char_2,
+        'name_word': model_name_word,
+        'loc': model_loc
+    }
+
+    return model_dict, char_vocab, word_vocab, max_len
+
+
+def convert_tokens_to_ids(query, vocab):
+    ids_ = []
+    for one in query:
+        if one.isalpha():
+            one = one.upper()
+        if one in vocab:
+            ids_.append(vocab[one])
+        else:
+            ids_.append(vocab['<UNK>'])
+    return ids_
+
+
+from dssm.data_process import cleanWord
+
+
+def dataPro(s1, s2, max_len, vocab, flag_=False):
+    '''
+
+    :param s1:
+    :param s2:
+    :param max_len:
+    :param vocab:
+    :param flag_: segment_type  True-->word level
+    :return:
+    '''
+
+    def clean_(sen_):
+        tmp_ = []
+        for k in sen_.split():
+            if flag_:
+                k = cleanWord(k)
+            tmp_.append(k)
+
+        if len(tmp_) <= 5:
+            tmp_ = tmp_ * 2
+
+        return ' '.join(tmp_)
+
+    s1 = clean_(s1)
+    s2 = clean_(s2)
+
+    q = s1[:min(len(s1), max_len)]
+    d = s2[:min(len(s2), max_len)]
+
+    if flag_:
+        q = q.split()
+        d = d.split()
+
+    q = convert_tokens_to_ids(q, vocab)
+    q = q + [0] * (max_len - len(q))
+
+    d = convert_tokens_to_ids(d, vocab)
+    d = d + [0] * (max_len - len(d))
+
+    return q, d
+
+
+def isSameModel(data_, model):
+    """
+    基于模型处理相似度
+    :param data_:
+    :param model:
+    :return:
+    """
+    data_ = {'query_': torch.tensor(data_[0]).unsqueeze(0), 'doc_': torch.tensor(data_[1]).unsqueeze(0)}
+    with torch.no_grad():
+        pred = model(data_)
+        k_ = torch.max(pred, 1)[1][0]
+        return k_.data.item()
+
+
+def sameLogic(data_1, data_2, model_dict, char_vocab, word_vocab, max_len):
+    """
+    基于名称与地址的相似判定逻辑
+    :param sim_1:
+    :param sim_2:
+    :return:
+    """
+
+    name_1, name_2 = dataPro(data_1[0], data_2[0], max_len, char_vocab)
+    name_1_w, name_2_w = dataPro(data_1[0], data_2[0], max_len, word_vocab, True)
+
+    name_sim_char_1 = isSameModel([name_1, name_2], model_dict['name_char_1'])  # model 有偏，后续可优化
+    name_sim_word = isSameModel([name_1_w, name_2_w], model_dict['name_word'])
+
+    if len(data_1[1]) <= 5 or len(data_2[1]) <= 5:  ### 地址为空 则略过
+        loc_sim = -1
+    else:
+        loc_1, loc_2 = dataPro(data_1[1], data_2[1], max_len, char_vocab)
+        loc_sim = isSameModel([loc_1, loc_2], model_dict['loc'])
+
+    print('Test processSet', data_1, data_2, name_sim_char_1, name_sim_word, loc_sim)
+
+    if name_sim_char_1 + name_sim_word == 0 and loc_sim <= 0:
+        return True
+    # 对此部分的处理逻辑有待评测
+    elif name_sim_char_1 + name_sim_word == 0 and loc_sim == 1:
+        name_sim_char_2 = isSameModel([name_1, name_2], model_dict['name_char_2'])  # model 有偏，后续可优化
+        if name_sim_char_2 == 0:
+            return True
+        else:
+            return False
+    elif name_sim_char_1 + name_sim_word == 1 and loc_sim <= 0:  ### 基于地址相似判定相似
+        name_sim_char_2 = isSameModel([name_2, name_1], model_dict['name_char_2'])  # model 有偏，后续可优化
+        if name_sim_char_2 == 0:
+            return True
+        else:
+            return False
+    else:
+        return False
+
+
 def infoSense(path_):
+    '''
+    Tmp
+    :param path_:
+    :return:
+    '''
     with open(path_, 'rb') as f:
         id2sentence = pickle.load(f)
         word2sentenceid = pickle.load(f)
         cluster2set = pickle.load(f)
+        #
+        # fout = open('./tmp.info', 'w')
+        # for k in word2sentenceid:
+        #     fout.write('{}-->{}\n'.format(k, len(word2sentenceid[k])))
+        # fout.close()
 
-        fout = open('./tmp.info', 'w')
+        fout = open('./tmp_info.info', 'w')
         for k in word2sentenceid:
-            fout.write('{}-->{}\n'.format(k, len(word2sentenceid[k])))
+            if len(word2sentenceid[k]) < 500:
+                fout.write('{}-->{}\n'.format(k, ' '.join([str(one) for one in list(word2sentenceid[k])])))
         fout.close()
 
 
 ###########################################################################################
 
-from dssm.runData import isSame
 
-
-def processSet(sen_set, id2sentence):
+def processSet(sen_set, id2sentence, model_dict, char_vocab, word_vocab, max_len):
     """
     处理set集合，获取子聚类类别
     :param sen_set:  sen_id_set
@@ -96,8 +261,9 @@ def processSet(sen_set, id2sentence):
         a_set = set({a})
 
         flag_ = []
-        for k in range(1, len(tmp_list[1:])):
-            if isSame(id2sentence[a][0], id2sentence[tmp_list[k]][0]):
+        for k in range(1, len(tmp_list)):
+            if sameLogic(id2sentence[a], id2sentence[tmp_list[k]], model_dict, char_vocab, word_vocab,
+                         max_len):  # 核心  相似判定
                 flag_.append(tmp_list[k])
                 a_set.add(tmp_list[k])
 
@@ -110,39 +276,111 @@ def processSet(sen_set, id2sentence):
     return set_list
 
 
-def processCluster(set_list, cluster_set, info_=''):
+def processCluster(word_list, word2sentenceid, id2sentence, cluster_set):
     """
     针对word2set的计算结果，更新cluster2set
-    :param set_list:  子聚类结果 列表
+    :param word_list:  子聚类结果 列表
     :param cluster_set: sentenceid --> ???
     :return:
     """
-    for tmp_ in set_list:
-        for id_ in tmp_:
-            if not cluster_set[id_]:
-                cluster_set[id_] = [tmp_]
-            else:
-                # print(cluster_set[id_], tmp_)
-                flag_ = 0
-                for i in range(len(cluster_set[id_])):
-                    if len(cluster_set[id_][i] & tmp_) * 2 >= min(len(tmp_), len(cluster_set[id_][i])):
-                        cluster_set[id_][i] = cluster_set[id_][i] | tmp_
-                        flag_ = 1
-                        break
-                if flag_ == 0:
-                    cluster_set[id_].append(tmp_)
 
-    print(BASE_PATH + 'cluster.{}.pk'.format(info_))
-    pickleDumpFile(BASE_PATH + 'cluster.{}.pk'.format(info_), cluster_set)
-    return BASE_PATH + 'cluster.{}.pk'.format(info_)
+    model_dict, char_vocab, word_vocab, max_len = model_init()
 
-    # for word in word2sentenceid:
-    #     word_ssen_et = word2sentenceid[word]
-    #     set_list = processSet(word_ssen_et, id2sentence)
-    #     processCluster(set_list, cluster2set)
+    cluster_info_ = {}
+
+    for word_ in word_list:  ###对于word 的顺序要有要求
+        word_sen_set = word2sentenceid[word_]
+        set_list = processSet(word_sen_set, id2sentence, model_dict, char_vocab, word_vocab, max_len)  # 分割成不同的集合
+        for set_ in set_list:
+            for id_ in set_:
+                if cluster_set[id_] == False:
+                    cluster_set[id_] = set_
+                    cluster_info_[id_] = [word_]
+                elif set_ == cluster_set[id_]:
+                    continue
+                else:
+                    # 原有与 现有集合的关系
+                    merge_ = set_ | cluster_set[id_]
+                    if len(merge_) > len(cluster_set[id_]):
+                        cluster_set[id_] = merge_
+                        for id_m in merge_:
+                            cluster_set[id_m] = merge_  # 此步骤为粗筛
+                            cluster_info_[id_].append(word_)
+
+    pickleDumpFile('cluster_set_{}.pk'.format(len(word_list)), cluster_set)
+
+    return cluster_info_
+
+
+def runPart(path_=BASE_PATH + '/baseDictData.pk', word_sen_path=BASE_PATH + '/word_sen_num'):
+    with open(path_, 'rb') as f:
+        id2sentence = pickle.load(f)
+        word2sentenceid = pickle.load(f)
+        cluster2set = pickle.load(f)
+
+    word_dic = {}
+    with open(word_sen_path, 'r') as f:
+        for one in f:
+            tmp_ = one.rstrip().split('\t')
+            word_dic[tmp_[0]] = int(tmp_[1])
+
+    word_list = []
+    threld = [5, 100]
+    for k in word_dic:
+        if word_dic[k] >= threld[0] and word_dic[k] <= threld[1]:
+            word_list.append(k)
+
+    # tmp_list = random.sample(word_list, 100)
+    # XXX TODO
+    tmp_list = ['KARRSEN', 'Devices', 'ZHONGSAI', 'JINWEIXIN', 'XUYA', 'JIAOWAY', 'SMARTTSAI', 'SANITY', 'CHEERIO', 'House',
+                'MEIBAOJIE', 'TROLAND', 'LINGGU', 'SMITT', 'EQUIPMENT&TECHNOLOGY', 'DOLLY', 'KONG,CHINA', 'GAOLU', 'FIRMSTOCK',
+                'JAWNA', 'PLATIRID', 'SCHIEFFER', 'MEEZAN', 'JIEMAOIMPORTEX', 'GMBHNEULANDER', 'KAOFU', 'KHIND', 'PATTYN', 'PLASTIE',
+                'ЛЕСОПРОМЫШЛЕННОСТЬ"', 'LILIANA', 'AFRIKON', 'Liqiang', 'KERSEN', 'CDN', 'ШЕНГ', 'CAFFE', 'EVERYTHING', 'SUNSEEKER',
+                'SHZ', 'SEPSTAR', 'LEADERMOUNT', 'SONGDA', 'SENBA', 'ROSTE', 'FEIFEI', 'SINLY', 'CORPORATION/HUAFANG', 'BUDWEISER',
+                'DUOMI', 'WELLOAD', 'HANDTOOLS&HARDWARE', 'GUZNGZHOU', '2-5F', 'BAGS&APPAREL', 'BEINGMATE', 'VIBOTEX', 'ITTA',
+                'RAILING&FENCING', 'NONGYE', 'SCLENCE', 'ARLANXEO', 'KAIXIANGTONG', 'TYP', '(RELIANCE)', 'GUANGDONG.', 'HONGCAO',
+                'BONATE', 'TSINKING', 'STEINEMANN', 'РЕШЕНИЯ', 'HEXIHE', 'BUSIESS', 'KATAMAN', 'ENGLISH', 'J.TOP', '"ЛЮЛИН"', 'NEWDA',
+                'Center,', 'SCARLETT', 'ALMUQADIMAH', 'TISHIELD', 'BOHOLY', 'GLODEN', 'VONWELT', 'MASTER&FRANK', 'LABORATORIES(INNER',
+                'DARVEEN', 'NORWICH', 'JOINTPOWER', 'AMERAS', 'KOLN', 'QSSIELECTRIC', 'GILMAN', 'ELECTRONICS(HUI', 'MEFU',
+                'KANGCHUNAN', 'IND.CO.,LTD.', 'SINO-CHTC', 'SHUANGMU']
+
+    # tmp_list = ['DUOMI']
+
+    cluster_info_ = processCluster(tmp_list, word2sentenceid, id2sentence, cluster2set)
+
+    infoCluster(tmp_list, cluster2set, id2sentence, cluster_info_)
+
+
+def infoCluster(word_list, cluster2set, id2sentence, cluster_info_):
+    '''
+    打印相关聚类
+    :param cluster2set:
+    :param id2sentence:
+    :return:
+    '''
+    print('\t'.join(word_list))
+
+    info_ = set({})
+    for k in cluster2set:
+
+        if cluster2set[k] == False:
+            continue
+
+        t_set = tuple(cluster2set[k])
+        if t_set in info_:
+            continue
+        else:
+            info_.add(t_set)
+            line_ = []
+            h_ = str(hash(t_set))
+            for id_ in cluster2set[k]:
+                line_.append(h_ + '\001\002' + '\t'.join(cluster_info_[id_]) + '\001\001' + '\001\001'.join(id2sentence[id_]))
+            if len(line_) < 10:
+                print('\n'.join(line_))
 
 
 # =============================================================================
+
 
 import multiprocessing
 import copy
@@ -205,12 +443,14 @@ def multiRun():
 #############TMP######
 import random
 import pandas as pd
-from dssm.runData import isSameNew
+
+
+# from dssm.runData import isSameNew
 
 
 def makePosTestData(path_):
     """
-    构建地点信息数据集，用于测试 基于名称的模型效果
+    构建地点信息训练数据集，用于测试 基于名称的模型效果
     :param path_:
     :return:
     """
@@ -254,4 +494,8 @@ if __name__ == '__main__':
     pass
     # makeDictData('../data/data.log')
     # infoSense(BASE_PATH + '/baseDictData.pk')
-    makePosTestData('../data/posi.data')
+    # makePosTestData('../data/posi.data')
+
+    # a = model_init()
+
+    runPart()

@@ -58,7 +58,6 @@ def distance_tf(s1, s2):
 # ================================================================================================
 
 
-
 def isSame(s1, s2):
     """
     判定集合， 判定两个句子是否相等
@@ -115,6 +114,7 @@ filter_word = set(
     {'LTD', 'CO.,LTD', 'LIMITED', 'LTD.', 'CO', 'CO.,LTD.', 'CO.LTD', 'COMPANY', 'GROUP', 'INC.', 'CO.LTD.', 'CO.',
      'CO.,', 'CO.,',
      'LIMITED', 'LIMITED.', 'LTD,', 'LTD.,', 'LIMITE', '.,LTD', ',LTD', 'LTD.', 'LLC.', 'CO..LTD.', 'CO.,LIMITED'})
+
 
 def isSameNew(s1, s2):
     threshold_ = {'tf': {0: {'mean': 0.692, 'var': 0.024, 'std_var': 0.156},
@@ -177,11 +177,12 @@ def isSameNew(s1, s2):
     return edt, edt_dis, tf, tf_dis, jaca, jaca_dis
 
 
-
-
 # ===============================================================================================
 import numpy as np
 import pickle
+import random
+
+BASE_PATH = '../cluster/'
 
 
 def getThreshold(path_):
@@ -332,16 +333,19 @@ def writeExcel(path_):
 
 ######################################
 
-import torch
+import torch, os
 
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-# device = 'cpu'
-# BASE_DATA_PATH = '../data/'
-# vacab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
-# model = torch.load(BASE_DATA_PATH + '/final_model_4_0_400ford.pt').to(device)
-# model.eval()
-# max_len = 64
+def run():
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    device = 'cpu'
+    BASE_DATA_PATH = '../data/'
+    vacab = pickle.load(open(BASE_DATA_PATH + '/char2id.vocab', 'rb'))
+    model = torch.load(BASE_DATA_PATH + '/final_model_4_0_400ford.pt').to(device)
+    model.eval()
+    max_len = 64
+
+    return max_len, model
 
 
 def convert_tokens_to_ids(query, vocab):

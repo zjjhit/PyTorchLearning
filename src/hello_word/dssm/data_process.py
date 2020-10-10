@@ -12,28 +12,41 @@ class DSSMCharDataset(Dataset):
     基于字符的 数据集合
     """
 
-    def __init__(self, dataset, vocab, max_len=128, model='train', overturn=False):
+    def __init__(self, dataset, vocab, config):
         self.dataset = dataset
-        self.max_len = max_len
-        self.overturn = overturn
-        self.data_size = len(dataset)
         self.vocab = vocab
-        self.model = model
+
+        self.max_len = config.max_len
+        self.overturn = config.overturn
+        self.segment_type = config.segment_type  # char  or  word
+
+        self.model = config.model
         self.DataDict = {}
         self.__preData__()
+        self.data_size = len(self.DataDict)
 
     def __len__(self):
         return len(self.DataDict)
 
     def convert_tokens_to_ids(self, query):
         ids_ = []
-        for one in query:
-            if one.isalpha():
-                one = one.upper()
-            if one in self.vocab:
-                ids_.append(self.vocab[one])
-            else:
-                ids_.append(self.vocab['<UNK>'])
+        if self.segment_type == 'word':
+            for one in query.split():
+                if one.isalpha():
+                    one = one.upper()
+                one = cleanWord(one)
+                if one in self.vocab:
+                    ids_.append(self.vocab[one])
+                else:
+                    ids_.append(self.vocab['<UNK>'])
+        else:
+            for one in query:
+                if one.isalpha():
+                    one = one.upper()
+                if one in self.vocab:
+                    ids_.append(self.vocab[one])
+                else:
+                    ids_.append(self.vocab['<UNK>'])
         return ids_
 
     def __preData__(self):
@@ -72,7 +85,7 @@ class DSSMCharDataset(Dataset):
 
             if self.overturn == True:
                 output_turn = {
-                    'origin_': item['origin'],
+                    'origin_': text_[1] + '\001\002' + text_[0],
                     'query_': torch.tensor(doc_ids),
                     'doc_': torch.tensor(query_ids)
                 }
@@ -113,6 +126,55 @@ def vocab_build(dict_path, min_count=-float("inf")):
     pickle.dump(word2id, fout)
     fout.close()
     return word2id
+
+
+def cleanWord(word_):
+    filter_char = set([',', '.', '/', '!'])
+    while len(word_) > 0:
+        if word_[-1] in filter_char:
+            word_ = word_[:-1]
+        else:
+            break
+    return word_
+
+
+def buildWordCab(data_path, min_count=5):
+    """
+    清洗数据 word
+    :param data_path:
+    :return:
+    """
+
+    word_dict = {}
+    with open(data_path) as f:
+        for one in f:
+            tmp_ = one.rstrip().split('\001\002')
+            if len(tmp_) != 5:
+                continue
+            words_ = tmp_[-2].split(' ')
+            for k in words_:
+                k = cleanWord(k).upper()
+                if k not in word_dict:
+                    word_dict[k] = 1
+                else:
+                    word_dict[k] += 1
+
+    fout = open(BASE_DATA_PATH + '/' + 'origin_word.vocab', 'wb')
+    pickle.dump(word_dict, fout)
+    fout.close()
+    use_word = {}
+    use_word['<PAD>'] = 0
+    use_word['<UNK>'] = 1
+    num_ = 2
+    for k in word_dict:
+        if word_dict[k] >= min_count:
+            use_word[k] = num_
+            num_ += 1
+
+    fout = open(BASE_DATA_PATH + '/' + 'emb_word_{}.vocab'.format(str(num_)), 'wb')
+    pickle.dump(use_word, fout)
+    fout.close()
+    print('emb num {}'.format(num_))
 
 
 import re
@@ -540,3 +602,4 @@ def makeHQTrainData(path_csv, path_manua, path_fake):
     df.to_csv(BASE_DATA_PATH + 'train_new.csv', index=False)
 
 # makeHQTrainData('../data/train.csv', '../manua.data.pos', '../fake.data.pos')
+# buildWordCab('../data/data.log')
