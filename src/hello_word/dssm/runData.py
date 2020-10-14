@@ -32,11 +32,13 @@ def distance_jacaard(s1, s2):
     cv = CountVectorizer(tokenizer=lambda s: s.split())
     corpus = [s1, s2]
     vectors = cv.fit_transform(corpus).toarray()
+    # print(vectors)
     # 求交集
     numerator = np.sum(np.min(vectors, axis=0))
     # 求并集
     denominator = np.sum(np.max(vectors, axis=0))
     # 计算杰卡德系数
+
     return 1.0 * numerator / denominator
 
 
@@ -129,6 +131,9 @@ def isSameNew(s1, s2):
 
     s1 = filterWord(s1, filter_word)
     s2 = filterWord(s2, filter_word)
+
+    if len(s1) == 0 or len(s2) == 0:
+        return [0] * 6
 
     edt = distance_edit(s1, s2)
     tf = distance_tf(s1, s2)

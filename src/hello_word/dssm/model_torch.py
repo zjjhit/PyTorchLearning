@@ -300,7 +300,7 @@ class DSSMFive(nn.Module):
         self.hidden_size = config.hidden_size  #
         self.kernel_out = config.kernel_out_1  # 32
         self.kernel_size = config.kernel_size  # 1
-        self.max_len = config.max_len  # 96
+        self.max_len = config.max_len  # 97
 
         self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size)
 
@@ -333,9 +333,9 @@ class DSSMFive(nn.Module):
                                              nn.Conv1d(in_channels=32,
                                                        out_channels=8,
                                                        kernel_size=4,
-                                                       stride=4),  # B 16 8
+                                                       stride=4),  # B 8 8
                                              nn.LeakyReLU(),
-                                             nn.BatchNorm1d(8),
+                                             nn.BatchNorm1d(8)
                                              )
         # (B 8 4) * 2 + (B 8 8)
         self.fc_1 = nn.Linear(in_features=128, out_features=16)
@@ -356,8 +356,8 @@ class DSSMFive(nn.Module):
         b_, _, _ = out_q.shape
         # print(out_q.shape, out_att.shape)
 
-        out_ = torch.cat((out_q.view(b_, -1), out_d.view(b_, -1), out_att.view(b_, -1)), dim=1)  # B 16 8
-
+        out_ = torch.cat((out_q.view(b_, -1), out_d.view(b_, -1), out_att.view(b_, -1)), dim=1)  # B 16 24
+        # print(out_.shape)
         out_ = self.relu_1(self.fc_1(out_.view(b_, -1)))
         out_ = self.fc_2(out_)
 

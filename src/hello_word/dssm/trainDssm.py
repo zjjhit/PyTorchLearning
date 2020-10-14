@@ -97,10 +97,11 @@ if __name__ == '__main__':
     #     {"params": conv1d_params, "lr": 1e-3},
     # ]
 
-    kf = KFold(n_splits=20, shuffle=True)
+    kf = KFold(n_splits=10, shuffle=True)
     for k, (train_index, val_index) in enumerate(kf.split(range(len(dataset)))):
-        if k >= 10:
-            break
+        # if k >= 10:
+        #     break
+
         train = dataset.iloc[train_index]
         val = dataset.iloc[val_index]
 
@@ -108,9 +109,17 @@ if __name__ == '__main__':
         val = DSSMCharDataset(val, vocab, config)
         val = DataLoader(val, batch_size=config.batch_size, num_workers=2)
 
-        print('Start train {} ford {}'.format(k, len(train)))
+        print('Start train {} ford {}'.format(k, len(train_base)))
+
+        # if True:
+        #     break
 
         best_loss = 100000
+
+        stop_theld = 0  # >3 stop
+        stop_value = 0.05
+        old_total = best_loss
+
         for n_ in range(config.nums + 1):  # Epoch
             train = DataLoader(train_base, batch_size=config.batch_size, shuffle=True)
 
@@ -141,7 +150,7 @@ if __name__ == '__main__':
                 loss.backward()
                 optimizer.step()
 
-                if i % 10 == 0:
+                if i % 20 == 0:
                     print(y_pred.data[0:5])
                     print('k ford and nums ,{} ,{},loss is {}'.format(n_, i, loss.data.item()))
                     for name, parms in model.named_parameters():
@@ -153,7 +162,7 @@ if __name__ == '__main__':
 
                 total_loss += loss.data.item()
 
-                if i % 2 == 0:
+                if i % 3 == 0:
 
                     with torch.no_grad():
                         model.eval()
@@ -186,3 +195,9 @@ if __name__ == '__main__':
                     model.train()
 
             print('total_loss ford and epochs ,{} ,{},loss is {}'.format(k, n_, total_loss))
+
+            if abs(total_loss - old_total) <= stop_value:
+                stop_theld += 1
+                if stop_theld >= 3:
+                    break
+                old_total = total_loss
