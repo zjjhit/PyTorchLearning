@@ -33,7 +33,7 @@ if __name__ == '__main__':
         dataset = pd.read_csv(sys.argv[2])
     else:
         BASE_DATA_PATH = '../data/'
-        config_path = '../data/config.json_5'
+        config_path = '../data/config.json_7'
         dataset = pd.read_csv('../data/tt.csv')  # processed_train.csv
 
     config = BertConfig.from_pretrained(config_path)
@@ -82,9 +82,11 @@ if __name__ == '__main__':
 
     ###损失函数定义
     if config.loss == 'bce':
-        criterion = torch.nn.BCEWithLogitsLoss().to(device)  ###需要调整 网罗结构
+        criterion = torch.nn.BCEWithLogitsLoss().to(device)  ###需要调整 网络结构
     elif config.loss == 'cross':
         criterion = torch.nn.CrossEntropyLoss().to(device)
+    elif config.loss == 'mse':
+        criterion = torch.nn.MSELoss().to(device)
     else:
         criterion = torch.nn.BCELoss().to(device)
 
@@ -97,7 +99,7 @@ if __name__ == '__main__':
     #     {"params": conv1d_params, "lr": 1e-3},
     # ]
 
-    kf = KFold(n_splits=10, shuffle=True)
+    kf = KFold(n_splits=20, shuffle=True)
     for k, (train_index, val_index) in enumerate(kf.split(range(len(dataset)))):
         # if k >= 10:
         #     break
@@ -135,10 +137,11 @@ if __name__ == '__main__':
                 y_pred = model(data)
                 b_, _ = y_pred.shape
 
-                if config.loss == 'bce':
+                if config.loss == 'bce' or config.loss == 'mse':
                     tmp_ = torch.ones(b_).to(device).view(b_, -1) - data['label_'].view(b_, -1)
-                    y_target = torch.cat((tmp_, data['label_'].view(b_, -1).float()), dim=1)
-                    loss = criterion(y_pred, y_target)
+                    # y_target = torch.cat((tmp_, data['label_'].view(b_, -1).float()), dim=1)
+                    # y_target = data['label_'].view(b_, -1).float()
+                    loss = criterion(y_pred, tmp_)
                     # loss = criterion(y_pred.view(b_, -1), data['label_'].view(b_, -1))
                 elif config.loss == 'cross':
                     loss = criterion(y_pred, data['label_'])
@@ -173,10 +176,11 @@ if __name__ == '__main__':
                             v_pred = model(data)
                             b_, _ = v_pred.shape
 
-                            if config.loss == 'bce':
+                            if config.loss == 'bce' or config.loss == 'mse':
                                 tmp_ = torch.ones(b_).to(device).view(b_, -1) - data['label_'].view(b_, -1)
-                                y_target = torch.cat((tmp_, data['label_'].view(b_, -1).float()), dim=1)
-                                loss = criterion(v_pred, y_target)
+                                # y_target = torch.cat((tmp_, data['label_'].view(b_, -1).float()), dim=1)
+                                # y_target = data['label_'].view(b_, -1).float()
+                                loss = criterion(v_pred, tmp_)
                             elif config.loss == 'cross':
                                 loss = criterion(v_pred, data['label_'])
                             else:
@@ -199,5 +203,6 @@ if __name__ == '__main__':
             if abs(total_loss - old_total) <= stop_value:
                 stop_theld += 1
                 if stop_theld >= 3:
+                    print('Stop Early_{}_{}_{}'.format(k, n_, i))
                     break
                 old_total = total_loss

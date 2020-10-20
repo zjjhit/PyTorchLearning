@@ -84,6 +84,8 @@ def model_init():
     os.environ["CUDA_VISIBLE_DEVICES"] = conf.gpu_id
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    print('{}_{}_{}_{}'.format(conf.model_name_char_1, conf.model_name_char_2, conf.model_name_word, conf.model_loc))
+
     char_vocab = pickle.load(open(model_path + conf.char_vocab, 'rb'))
     model_name_char_1 = torch.load(model_path + conf.model_name_char_1).to(device)
     model_name_char_1.eval()
@@ -122,10 +124,10 @@ def convert_tokens_to_ids(query, vocab):
     return ids_
 
 
-from dssm.data_process import cleanWord
+from dssm.data_process import cleanWord, cleanFilterList
 
 
-def dataPro(s1, s2, max_len, vocab, flag_=False):
+def dataPro(s1, s2, max_len, vocab, clean_flag_=False, word_flag=False):
     '''
 
     :param s1:
@@ -139,22 +141,25 @@ def dataPro(s1, s2, max_len, vocab, flag_=False):
     def clean_(sen_):
         tmp_ = []
         for k in sen_.split():
-            if flag_:
-                k = cleanWord(k)
+            if k in cleanFilterList:
+                continue
+            k = cleanWord(k)
+
             tmp_.append(k)
 
-        # if len(tmp_) <= 5:
-        #     tmp_ = tmp_ * 2
+        if len(tmp_) <= 3:
+            tmp_ = tmp_ * 2
 
         return ' '.join(tmp_)
 
-    # s1 = clean_(s1)
-    # s2 = clean_(s2)
+    # if flag_:
+    #     s1 = clean_(s1)
+    #     s2 = clean_(s2)
 
     q = s1[:min(len(s1), max_len)]
     d = s2[:min(len(s2), max_len)]
 
-    if flag_:
+    if word_flag:
         q = q.split()
         d = d.split()
 
@@ -195,21 +200,21 @@ def sameLogic(data_1, data_2, model_dict, char_vocab, word_vocab, max_len, devic
     if len(data_1[1]) <= 5 or len(data_2[1]) <= 5:  ### 地址为空 则略过
         loc_sim = -1
     else:
-        loc_1, loc_2 = dataPro(data_1[1], data_2[1], 96, char_vocab)  # :XXX max_len 未统一
+        loc_1, loc_2 = dataPro(data_1[1], data_2[1], max_len, char_vocab, True)  # :XXX max_len 未统一
         loc_sim = isSameModel([loc_1, loc_2], model_dict['loc'], device)
 
     edt_ = distance.levenshtein(data_1[0], data_2[0]) / (len(data_1[0]) + len(data_2[0]))
     if edt_ < 0.07:
         return True
 
-    name_1, name_2 = dataPro(data_1[0], data_2[0], max_len, char_vocab)
-    name_1_w, name_2_w = dataPro(data_1[0], data_2[0], 96, word_vocab, True)  # max_len 未统一
+    name_1, name_2 = dataPro(data_1[0], data_2[0], max_len, char_vocab, True)
+    name_1_w, name_2_w = dataPro(data_1[0], data_2[0], max_len, word_vocab, True, True)  # max_len 未统一
     name_sim_char_1 = isSameModel([name_1, name_2], model_dict['name_char_1'], device)  # model 有偏，后续可优化
     name_sim_word = isSameModel([name_1_w, name_2_w], model_dict['name_word'], device)
-    name_sim_char_2 = isSameModel([name_2, name_1], model_dict['name_char_1'], device)  # model 有偏，后续可优化
+    name_sim_char_2 = isSameModel([name_2, name_1], model_dict['name_char_2'], device)  # model 有偏，后续可优化
     # name_sim_word = 0
 
-    print('Test processSet', data_1, data_2, name_sim_char_1, name_sim_word, name_sim_char_2, loc_sim)
+    print('Test processSet,{},{}'.format(data_1, data_2), name_sim_char_1, name_sim_word, name_sim_char_2, loc_sim)
     # print(name_1_w, name_2_w)
 
     ###相似的逻辑处理 趋于更严格

@@ -128,6 +128,23 @@ def vocab_build(dict_path, min_count=-float("inf")):
     return word2id
 
 
+cleanFilterList = set(['LTD', 'CO.,LTD', 'LIMITED', 'LTD.', 'CO', 'CO.,LTD.', 'CO.LTD', 'INC', 'LT', 'CORP', 'COMPANY', 'GROUP',
+                       'FACTORY',
+                       'INC.', 'CORPORATION', 'CO.LTD.', 'BRANCH', 'LLC', 'CHINA', 'INTERNATIONAL', 'TRADE', 'EXPORT', 'CO.', 'CO.,',
+                       'TECHNOLOGY', 'CO.,LIMITED', 'PRODUCTS', 'GMBH', 'INDUSTRIAL', 'CORP.', 'CO,LTD', 'LIMITED.', 'S.A.', 'LTD"',
+                       'LTD,',
+                       'LTD.,', 'EXP', 'CO..LTD', 'CO,.LTD', 'CO.,LT', 'CO.,LTD"', 'CO.LIMITED', 'LIMITE', 'CO.,L', '.,LTD', 'COLTD',
+                       'LIMIT',
+                       'LI', 'INDUSTRY', 'C.V.', 'EXP.CO.,LTD', 'LIMI', 'LIM', 'B.V.', 'S.L.', '.', ',LTD', 'LTD."', 'LLC.',
+                       'CO..LTD.',
+                       'LTD)', 'S.P.A.', 'LIMITED,', 'IMP', 'S.A', 'S.R.L.', 'COMP', 'IMP.&EXP.CO.,LTD', 'TEC', 'SPA', 'LTDNO',
+                       'CORP.,LTD',
+                       'Ltd', 'CO.LT', 'CO.LTD.,', 'CO.,LTD)', 'LTD.-', 'CO,LTD.', 'CO.,LTD,', 'CO,', 'EXP.CO.,LTD.', 'CENTRE',
+                       'GARMENT',
+                       'INDUSTR', '.LTD', 'NORTH', 'A/S', 'PROD', 'LIMITED"', 'SCIENCE', 'BUSINESS', 'TEXTILES', 'COR', 'CO.,LTD."',
+                       'CORP.LTD', 'CO.L', 'EXP.CO.LTD', 'LIMTED', 'GLOBAL', 'CO.,LTD.,', 'CO.LTD,'])
+
+
 def cleanWord(word_):
     filter_char = set([',', '.', '/', '!'])
     while len(word_) > 0:

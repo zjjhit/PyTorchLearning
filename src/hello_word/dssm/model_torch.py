@@ -9,7 +9,6 @@
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 # from transformers import BertTokenizer, BertModel, BertConfig
@@ -425,37 +424,111 @@ class DSSMSix(nn.Module):
         return with_gamma
 
 
-class DSSMSeven(DSSMFour):
+import torch.nn.functional as F
+
+
+class DSSMSeven(nn.Module):
     """
     数据需要调换
     """
 
-    def __init__(self, config, device='cpu'):
-        # super(DSSMThree, self).__init__()
-        super(DSSMSeven, self).__init__(config, device)
+    def __init__(self, config):
+        super(DSSMSeven, self).__init__()
 
-        self.fc_s1 = nn.Linear(16, 4)
-        # self.norm_s1 = nn.BatchNorm1d(16)
-        self.fc_s2 = nn.Linear(4, 2)
+        # 此部分的信息有待处理
+        self.hidden_size = config.hidden_size  #
+        self.kernel_out = config.kernel_out_1  # 32
+        self.max_len = config.max_len  # 96
+
+        self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size)
+
+        self.convs_ = nn.Sequential(nn.Conv1d(in_channels=self.hidden_size,
+                                              out_channels=self.kernel_out,
+                                              kernel_size=3,  # 2
+                                              stride=3),
+                                    nn.LeakyReLU(),  # B 32 32
+                                    nn.BatchNorm1d(self.kernel_out),  # B*L*D->B*D*L->B*Kout*((L-size)/stride+1)
+                                    # nn.MaxPool1d(2),  # -> B*Kout* || / 2
+                                    nn.Conv1d(in_channels=self.kernel_out,
+                                              out_channels=32,
+                                              kernel_size=2,
+                                              stride=2),
+                                    nn.LeakyReLU(),  ## B 32 16
+                                    nn.MaxPool1d(2),  ## B 32 8
+                                    nn.BatchNorm1d(32),
+                                    nn.Conv1d(in_channels=32,
+                                              out_channels=8,
+                                              kernel_size=2,
+                                              stride=2),
+                                    nn.LeakyReLU()  ## B * 8 * 4
+                                    )
+
+        self.convs_attention = nn.Sequential(nn.Conv1d(in_channels=config.max_len,
+                                                       out_channels=32,
+                                                       kernel_size=3,
+                                                       stride=3),  # B 32 (max_len - ksize ) / stride + 1 : B 32 32
+                                             nn.LeakyReLU(),
+                                             nn.Conv1d(in_channels=32,
+                                                       out_channels=8,
+                                                       kernel_size=4,
+                                                       stride=4),  # B 8 8
+                                             nn.LeakyReLU(),
+                                             nn.BatchNorm1d(8)
+                                             )
+
+        self.att_linear = nn.Linear(config.max_len, config.max_len)  #
+        # # (B 8 4) * 2 + (B 8 8)
+        self.fc_1 = nn.Linear(in_features=96, out_features=8)
+        self.relu_1 = nn.LeakyReLU()
+        self.fc_2 = nn.Linear(in_features=16, out_features=2)
 
     def forward(self, data):
-        q = self.embeddings(data['query_']).permute(0, 2, 1)
-        d = self.embeddings(data['doc_']).permute(0, 2, 1)  # 待匹配的两个句子
+        q = self.embeddings(data['query_'])
+        d = self.embeddings(data['doc_'])
 
-        out_q = self.convs(q)
-        out_d = self.convs(d)  ### B 16 32
-        # print(out_d.shape)
-        # out_ = out_q - out_d
+        att_ = self.attention_matrix(q, d)
 
-        out_ = torch.cat((out_q, out_d), dim=1)  # B 32 32
-        out_ = self.learn_gamma(out_)  # B 16 1
-        out_ = self.lrelu(out_)
+        q = q.permute(0, 2, 1)
+        d = d.permute(0, 2, 1)  # 待匹配的两个句子
+
+        out_q = self.convs_(q)
+        out_d = self.convs_(d)
+
+        att_q = self.att_linear(att_.permute(0, 2, 1))
+        att_d = self.att_linear(att_)
+        out_att_q = self.convs_attention(att_q)
+        out_att_d = self.convs_attention(att_d)
 
         b_, _, _ = out_q.shape
-        # out_ = torch.cat((out_d.view(b_, -1), out_q.view(b_, -1)), 1)
 
-        out_ = self.fc_s2(self.fc_s1(out_.view(b_, -1)))
+        out_q = torch.cat((out_q.view(b_, -1), out_att_q.view(b_, -1)), dim=1).view(b_, -1)  # B 8 12
+        out_d = torch.cat((out_d.view(b_, -1), out_att_d.view(b_, -1)), dim=1).view(b_, -1)  # B 8 12
 
-        # out_ = self.fc_s2(out_)
+        out_q = self.relu_1(self.fc_1(out_q))
+        out_d = self.relu_1(self.fc_1(out_d))
+        out_ = torch.cat((out_q, out_d), dim=1)
+        out_ = self.fc_2(out_)
+
+        # dis_ = 1 / (1 + F.pairwise_distance(out_q, out_d, keepdim=True))
 
         return out_
+
+    def attention_matrix(self, x_1, x_2, eps=1e-6):
+        '''compute attention matrix using match score
+        1 / (1 + |x · y|)
+        |·| is euclidean distance
+        Parameters
+        ----------
+        x1, x2 : 4-D torch Tensor
+            size (batch_size, sentence_length, width)
+        Returns
+        -------
+        output : 3-D torch Tensor
+            match score result of size (batch_size, sentence_length(for x2), sentence_length(for x1))
+        '''
+        x_1 = x_1.unsqueeze(1)  # size (batch_size, 1, sentence_length, width)
+        x_2 = x_2.unsqueeze(1)
+        eps = torch.tensor(eps)
+        one = torch.tensor(1.)
+        euclidean = (torch.pow(x_1 - x_2.permute(0, 2, 1, 3), 2).sum(dim=3) + eps).sqrt()
+        return (euclidean + one).reciprocal()

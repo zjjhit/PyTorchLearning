@@ -281,6 +281,124 @@ def makeThirdTrainData():
     df.to_csv('../Train/2020-10/' + 'test_avg.csv', index=False)
 
 
+def cleanNegData(path_0, path_1):
+    dic_ = {}
+
+    with open(path_0, 'r') as f:
+        for k in f:
+            t = k.rstrip().split('\001\001')
+            if len(t) != 2:
+                continue
+            if t[1] not in dic_:
+                dic_[t[1]] = t[0]
+
+    with open(path_1, 'r') as f:
+        for k in f:
+            t = k.rstrip().split('\001\001')
+            if len(t) != 2:
+                continue
+            if t[1] not in dic_:
+                dic_[t[1]] = t[0]
+
+    tmp_small = {}
+    tmp_big = {}
+    tmp_diff_big = {}
+    tmp_other = {}
+    print(len(dic_))
+    for k in dic_:
+        w = dic_[k].split('\001')
+        t_ = k.split('\001\002')
+        sen_1 = t_[0].split()
+        sen_2 = t_[1].split()
+
+        flag_ = True
+        for i in range(len(w)):
+            if i >= len(sen_1) or i >= len(sen_2):
+                flag_ = False
+                break
+            if w[i] != sen_1[i] or w[i] != sen_2[i]:
+                flag_ = False
+                break
+
+        if flag_:
+            if abs(len(sen_2) - len(sen_1)) <= 12:
+                tmp_small[k] = dic_[k]
+
+            if len(w) > 1:
+                tmp_big[k] = dic_[k]
+        else:
+            if len(w) > 1:
+                tmp_diff_big[k] = dic_[k]
+            else:
+                tmp_other[k] = dic_[k]
+
+    print(len(tmp_small), len(tmp_big), len(tmp_diff_big), len(tmp_other))
+    t_small = random.sample(list(tmp_small.keys()), 36200)
+    t_big = list(tmp_big.keys())
+    t_diff_big = random.sample(list(tmp_diff_big.keys()), 12000)
+    t_other = random.sample(list(tmp_other.keys()), 30200)
+
+    t_ = t_small + t_big + t_diff_big + t_other
+
+    random.shuffle(t_)
+
+    with open('../Train/2020-10/Verison2/neg.data', 'r') as f:
+        manu_neg = [one.rstrip() for one in f]
+
+    df = pd.DataFrame(columns=['origin', 'label'])
+    df['origin'] = t_[1000:] + manu_neg
+    df['label'] = [1] * (len(t_) - 1000 + len(manu_neg))
+    df.to_csv('../Train/2020-10/' + 'neg_avg.csv', index=False)
+
+    df = pd.DataFrame(columns=['origin', 'label'])
+    df['origin'] = t_[:1000]
+    df['label'] = [1] * 1000
+    df.to_csv('../Train/2020-10/' + 'neg_test_avg.csv', index=False)
+
+
+def cleanPosData(path_):
+    data_ = pd.read_csv(path_)
+    tmp_ = []
+    tmp_1 = []
+    tmp_2 = []
+    tmp_3 = []
+    tmp_4 = []
+
+    for i in range(len(data_)):
+        item = data_.iloc[i]
+
+        label_ = item['label']
+        text_ = item['origin']
+        txt_ = text_.split('\001\002')
+
+        edt_ = distance_edit(txt_[0], txt_[1])
+        set_a = set(txt_[0].split())
+        set_b = set(txt_[1].split())
+
+        if edt_ > 0.2 and abs(len(txt_[0]) - len(txt_[1])) < 10 and len(set_a & set_b) <= 2:
+            print(text_)
+            tmp_.append(i)
+
+        if edt_ < 0.07:
+            print('Same_07\t' + text_)
+            tmp_1.append(text_)
+        elif edt_ < 0.12:
+            print('Same_12\t' + text_)
+            tmp_2.append(text_)
+        elif edt_ < 0.17:
+            print('Same_17\t' + text_)
+            tmp_3.append(text_)
+        else:
+            print('Same_else\t' + text_)
+            tmp_4.append(text_)
+
+    t_ = random.sample(tmp_1, 3000) + random.sample(tmp_2, 1500) + random.sample(tmp_3, 1500) + tmp_4
+    df = pd.DataFrame(columns=['origin', 'label'])
+    df['origin'] = t_
+    df['label'] = [0] * len(t_)
+    df.to_csv('../Train/2020-10/' + 'pos_avg_5.csv', index=False)
+
+
 if __name__ == '__main__':
     # cleanPosData('../data/train_new.csv')
     # lc_('../train.info.pk')
@@ -290,4 +408,7 @@ if __name__ == '__main__':
     # cProfile.run(makeSecondTrainData('../Train/2020-10/train_new.csv', '../Train/2020-10/pos.data', '../Train/2020-10/neg.data'))
     # makeSecondTrainData('../Train/2020-10/train_new.csv', '../Train/2020-10/pos.data', '../Train/2020-10/neg.data')
     # cleanSecondData('../Train/2020-10/train_10.csv')
-    makeThirdTrainData()
+    # makeThirdTrainData()
+    # cleanNegData('../data/Data/data.train.neg0', '../data/Data/data.train.neg1')
+
+    cleanPosData('../Train/2020-10/pos_avg.csv')
