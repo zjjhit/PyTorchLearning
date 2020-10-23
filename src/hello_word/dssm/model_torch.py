@@ -298,10 +298,9 @@ class DSSMFive(nn.Module):
         # 此部分的信息有待处理
         self.hidden_size = config.hidden_size  #
         self.kernel_out = config.kernel_out_1  # 32
-        self.kernel_size = config.kernel_size  # 1
         self.max_len = config.max_len  # 97
 
-        self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size)
+        self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size, padding_idx=0)  # + pad unk
 
         self.convs = nn.Sequential(nn.Conv1d(in_channels=self.hidden_size,
                                              out_channels=self.kernel_out,
@@ -440,7 +439,7 @@ class DSSMSeven(nn.Module):
         self.kernel_out = config.kernel_out_1  # 32
         self.max_len = config.max_len  # 96
 
-        self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size)
+        self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size, padding_idx=0)
 
         self.convs_ = nn.Sequential(nn.Conv1d(in_channels=self.hidden_size,
                                               out_channels=self.kernel_out,
@@ -532,3 +531,48 @@ class DSSMSeven(nn.Module):
         one = torch.tensor(1.)
         euclidean = (torch.pow(x_1 - x_2.permute(0, 2, 1, 3), 2).sum(dim=3) + eps).sqrt()
         return (euclidean + one).reciprocal()
+
+
+class DSSMEight(DSSMSeven):
+    def __init__(self, config):
+        super(DSSMEight, self).__init__(config)
+        self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size, padding_idx=3)
+
+    def test(self):
+        print(self.embeddings.weight[:5])
+
+
+class DSSMNine(DSSMFive):
+    def __init__(self, config):
+        super(DSSMNine, self).__init__(config)
+        self.embeddings = nn.Embedding(config.vocab_size, self.hidden_size, padding_idx=3)
+
+    def test(self):
+        print(self.embeddings.weight[:5])
+
+
+from dssm.ABCNN import Abcnn2
+
+
+class DSSMAbcnn1(nn.Module):
+    def __init__(self, config):
+        super(DSSMAbcnn1, self).__init__()
+        # emb_dim, sentence_length, filter_width, filter_channel=100, layer_size=2, match='cosine',inception = True
+
+        self.emb = nn.Embedding(config.vocab_size, config.emb_dim, config.pad_id)
+        self.abcnn2 = Abcnn2(config.emb_dim, config.sentence_length, config.filter_width, layer_size=config.layer_size)
+
+    # def to(self, device):
+    #     self.emb.to(device)
+    #     self.abcnn2.to(device)
+
+    def forward(self, data):
+        q = self.emb(data['query_'])
+        d = self.emb(data['doc_'])
+        x1 = q.unsqueeze(1)
+        x2 = d.unsqueeze(1)
+        # x1 = x1.permute(0, 1, 3, 2)
+        # x2 = x2.permute(0, 1, 3, 2)  # 待匹配的两个句子
+
+        # print(x1.shape)
+        return self.abcnn2(x1, x2)

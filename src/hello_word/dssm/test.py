@@ -22,12 +22,10 @@ from transformers import BertConfig
 
 def test():
     print('begin0')
-    # os.environ["CUDA_VISIBLE_DEVICES"] = '2'
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = 'cpu'
 
     print('begin')
-    config_path = '../data/config.json_7'
+    config_path = '../data/config.json_ab_1'
     dataset = pd.read_csv('../data/test_avg_1.csv')  # processed_train.csv
 
     config = BertConfig.from_pretrained(config_path)
@@ -36,7 +34,8 @@ def test():
     data_base = DSSMCharDataset(dataset, vacab, config)  # same with the config_4
     data = DataLoader(data_base, batch_size=100)
 
-    model = torch.load(BASE_DATA_PATH + 'model/name__best_model_char_7_8_0_3_ford.pt').to(device)
+    model = torch.load(BASE_DATA_PATH + 'model/name_ab3__best_model_char_ab1_5_1_69_ford.pt',
+                       map_location=lambda storage, loc: storage)
 
     with torch.no_grad():
         num_ = []
@@ -77,24 +76,31 @@ from dssm.clusterProcess import model_init, sameLogic
 
 
 def testSigle(s1, s2):
-    model_dict, char_vocab, word_vocab, max_len, device = model_init()
-    name_sim = sameLogic(s1, s2, model_dict, char_vocab, word_vocab, max_len, device)
+    model_dict, char_vocab, max_len, device = model_init()
+    name_sim = sameLogic(s1, s2, model_dict, char_vocab, max_len, device)
 
     print(name_sim)
 
 
-from dssm.clusterProcess import dataPro
+from dssm.clusterProcess import dataProcessChar, dataProcessWord
+from dssm.utils import SegmentWord
 
 
 def testOne(s1, s2):
     device = 'cpu'
-    config_path = '../data/config.json_7'
-
+    config_path = '../data/config.json_loc_8'
     config = BertConfig.from_pretrained(config_path)
-    model = torch.load(BASE_DATA_PATH + 'model/name__best_model_char_7_6_0_0_ford.pt').to(device)
-    vacob = pickle.load(open(BASE_DATA_PATH + '/' + config.vocab_name, 'rb'))
-    name_1, name_2 = dataPro(s1, s2, config.max_len, vacob)
-    # print(name_1, name_2)
+    model = torch.load(BASE_DATA_PATH + 'model/loc__best_model_word_8_5_0_15_ford.pt', map_location=lambda storage, loc: storage)
+    if config.segment_type == 'word':
+        segment_ = SegmentWord(config.segment_model)
+        name_1, name_2 = dataProcessWord(s1, s2, config.max_len, config.max_len, config.pad_id, segment_)
+        print(segment_.encodeAsPieces(s1))
+        print(segment_.encodeAsPieces(s2))
+    else:
+        vocab = pickle.load(open(BASE_DATA_PATH + '/' + config.vocab_name, 'rb'))
+        name_1, name_2 = dataProcessChar(s1, s2, config.max_len, vocab)
+
+    print(name_1, name_2)
     with torch.no_grad():
         data_ = {'query_': torch.tensor(name_1).unsqueeze(0).to(device), 'doc_': torch.tensor(name_2).unsqueeze(0).to(device)}
         pred = model(data_)
@@ -109,18 +115,34 @@ def testOne(s1, s2):
         print(k_.data.item())
 
 
-from dssm.runData import distance_edit, distance_jacaard
+from dssm.utils import distance_jacaard, distance_edit
+
+from dssm.clusterProcess import ruleEditForFalse
+from dssm.clusterProcess import ruleLoc
 
 if __name__ == '__main__':
     pass
     # test()
-    s1 = ["AZIENDE RIUNITE CAFFE SPA VIA IPPOLITO ROSELLINI,2-20124 MILANO", 'NULL']
-    s2 = ["ESSSE CAFFE SPA", 'NULL']
 
-    testOne(s1[0], s2[0])
+    a = "NO 301 QINHE ROAD KUNSHAN CITY JIANGSU CHINA"
+    b = " NO 199 TONGQIU ROAD KUNSHAN CITY JIANGSU CHINA"
+    s1 = [a, 'NULL']
+    s2 = [b, 'NULL']
+
+    # testOne(s1[0], s2[0])
 
     # testSigle(s1, s2)
 
     print(distance_edit(s1[0], s2[0]))
 
     print(distance_jacaard(s1[0], s2[0]))
+    print(len(s1[0]), len(s2[0]))
+
+    a = ", , ,,"
+    b = "  , , ,"
+
+    print(distance_edit(a, b))
+    print(distance_jacaard(a, b))
+    print(len(a), len(b))
+    print(ruleLoc(a, b))
+    print(ruleEditForFalse('BOSUNG', 'PUYOUNG'))

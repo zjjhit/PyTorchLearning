@@ -6,6 +6,8 @@ from torch.utils.data import Dataset
 
 BASE_DATA_PATH = '../data/'
 
+from dssm.utils import SegmentWord
+
 
 class DSSMCharDataset(Dataset):
     """
@@ -19,11 +21,15 @@ class DSSMCharDataset(Dataset):
         self.max_len = config.max_len
         self.overturn = config.overturn
         self.segment_type = config.segment_type  # char  or  word
+        self.pad_id = 0
+        if self.segment_type == 'word':
+            self.segment_ = SegmentWord(config.segment_model)
+            self.pad_id = config.pad_id
+            self.max_word = config.max_word
 
         self.model = config.model
         self.DataDict = {}
         self.__preData__()
-        self.data_size = len(self.DataDict)
 
     def __len__(self):
         return len(self.DataDict)
@@ -31,14 +37,12 @@ class DSSMCharDataset(Dataset):
     def convert_tokens_to_ids(self, query):
         ids_ = []
         if self.segment_type == 'word':
-            for one in query.split():
-                if one.isalpha():
-                    one = one.upper()
-                one = cleanWord(one)
-                if one in self.vocab:
-                    ids_.append(self.vocab[one])
-                else:
-                    ids_.append(self.vocab['<UNK>'])
+            # query = query.replace(' ', '', -1)
+            ids_ = self.segment_.encodeAsIds(query)
+            if len(ids_) > self.max_word:
+                ids_ = ids_[:self.max_word]
+            else:
+                ids_ = ids_ + [self.pad_id] * (self.max_word - len(ids_))
         else:
             for one in query:
                 if one.isalpha():
@@ -47,6 +51,7 @@ class DSSMCharDataset(Dataset):
                     ids_.append(self.vocab[one])
                 else:
                     ids_.append(self.vocab['<UNK>'])
+            ids_ = ids_ + [self.pad_id] * (self.max_len - len(ids_))
         return ids_
 
     def __preData__(self):
@@ -64,19 +69,18 @@ class DSSMCharDataset(Dataset):
             query_ = query_[:min(len(query_), self.max_len)]
             # convert to ids
             query_ids = self.convert_tokens_to_ids(query_)
-            query_ids = query_ids + [0] * (self.max_len - len(query_ids))
+            # query_ids = query_ids + [self.pad_id] * (self.max_len - len(query_ids))
 
             doc_ = text_[1]
             doc_ = doc_[:min(len(doc_), self.max_len)]
             doc_ids = self.convert_tokens_to_ids(doc_)
-            doc_ids = doc_ids + [0] * (self.max_len - len(doc_ids))
+            # doc_ids = doc_ids + [self.pad_id] * (self.max_len - len(doc_ids))
 
             output = {
                 'origin_': item['origin'],
                 'query_': torch.tensor(query_ids),
                 'doc_': torch.tensor(doc_ids)
             }
-            # print(type(output['doc_']))
             if self.model == 'train':
                 label_ = item['label']
                 output['label_'] = torch.tensor(np.long(label_))  # torch.tensor(label_)
@@ -97,35 +101,6 @@ class DSSMCharDataset(Dataset):
 
     def __getitem__(self, item):
         return self.DataDict[item]
-
-
-def vocab_build(dict_path, min_count=-float("inf")):
-    """
-    :param dict_  字符集合与对应频率
-    :param min_count: 最小词频
-    :return:  word2id = {'<PAD>':0, 'word1':id_1, ……， '<UNK>':id_n}
-    """
-    with open(dict_path, 'rb') as f:
-        dict_ = pickle.load(f)
-
-    word2id = {}
-    new_id = 1
-    for char in dict_.keys():
-        if dict_[char] < min_count:
-            continue
-        if char.isalpha():
-            char = char.upper()
-        word2id[char] = new_id  # word2id = {'<PAD>':0, 'word1':id_1, ......, '<UNK>':id_n}
-        new_id += 1
-    word2id['<UNK>'] = new_id
-    word2id['<PAD>'] = 0
-    print("len(word2id):", len(word2id))
-    for k in word2id:
-        print(k, word2id[k])
-    fout = open(BASE_DATA_PATH + '/' + 'char2id.vocab', 'wb')
-    pickle.dump(word2id, fout)
-    fout.close()
-    return word2id
 
 
 cleanFilterList = set(['LTD', 'CO.,LTD', 'LIMITED', 'LTD.', 'CO', 'CO.,LTD.', 'CO.LTD', 'INC', 'LT', 'CORP', 'COMPANY', 'GROUP',

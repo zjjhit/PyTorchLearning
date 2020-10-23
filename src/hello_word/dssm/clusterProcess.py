@@ -75,6 +75,7 @@ def makeDictData(path_, info_=''):
 
 import os, torch
 from transformers import BertConfig
+from dssm.utils import SegmentWord
 
 
 def model_init():
@@ -93,7 +94,7 @@ def model_init():
     model_name_char_2 = torch.load(model_path + conf.model_name_char_2).to(device)
     model_name_char_2.eval()
 
-    word_vocab = pickle.load(open(model_path + conf.word_vocab, 'rb'))
+    # word_vocab = pickle.load(open(model_path + conf.word_vocab, 'rb'))
     model_name_word = torch.load(model_path + conf.model_name_word).to(device)
     model_name_word.eval()
 
@@ -102,17 +103,25 @@ def model_init():
 
     max_len = conf.max_len
 
+    segment_ = SegmentWord(model_path + conf.segment_model)
+    segment_loc = None
+    if 'word' in conf.model_loc:
+        segment_loc = SegmentWord(model_path + conf.segment_loc_model)
+
     model_dict = {
         'name_char_1': model_name_char_1,
         'name_char_2': model_name_char_2,
         'name_word': model_name_word,
-        'loc': model_loc
+        'loc': model_loc,
+        'segment': segment_,
+        'segment_loc': segment_loc,
+        'pad_id': 3
     }
 
-    return model_dict, char_vocab, word_vocab, max_len, device
+    return model_dict, char_vocab, max_len, device
 
 
-def convert_tokens_to_ids(query, vocab):
+def convert_tokens_to_ids_char(query, vocab):
     ids_ = []
     for one in query:
         if one.isalpha():
@@ -127,7 +136,23 @@ def convert_tokens_to_ids(query, vocab):
 from dssm.data_process import cleanWord, cleanFilterList
 
 
-def dataPro(s1, s2, max_len, vocab, clean_flag_=False, word_flag=False):
+def dataProcessWord(s1, s2, max_len, max_word, pad_id, segment_):
+    q_ = segment_.encodeAsIds(s1[:min(len(s1), max_len)])
+    if len(q_) > max_word:
+        q_ = q_[:max_word]
+    else:
+        q_ = q_ + [pad_id] * (max_word - len(q_))
+
+    d_ = segment_.encodeAsIds(s2[:min(len(s2), max_len)])
+    if len(d_) > max_word:
+        d_ = d_[:max_word]
+    else:
+        d_ = d_ + [pad_id] * (max_word - len(d_))
+
+    return q_, d_
+
+
+def dataProcessChar(s1, s2, max_len, vocab, clean_flag_=False):
     '''
 
     :param s1:
@@ -144,7 +169,6 @@ def dataPro(s1, s2, max_len, vocab, clean_flag_=False, word_flag=False):
             if k in cleanFilterList:
                 continue
             k = cleanWord(k)
-
             tmp_.append(k)
 
         if len(tmp_) <= 3:
@@ -159,14 +183,10 @@ def dataPro(s1, s2, max_len, vocab, clean_flag_=False, word_flag=False):
     q = s1[:min(len(s1), max_len)]
     d = s2[:min(len(s2), max_len)]
 
-    if word_flag:
-        q = q.split()
-        d = d.split()
+    q = convert_tokens_to_ids_char(q, vocab)
+    q = q + [0] * (max_len - len(q))  # 0 pad_id
 
-    q = convert_tokens_to_ids(q, vocab)
-    q = q + [0] * (max_len - len(q))
-
-    d = convert_tokens_to_ids(d, vocab)
+    d = convert_tokens_to_ids_char(d, vocab)
     d = d + [0] * (max_len - len(d))
 
     return q, d
@@ -187,34 +207,134 @@ def isSameModel(data_, model, device):
 
 
 import distance
+from dssm.utils import distance_jacaard, distance_edit
 
 
-def sameLogic(data_1, data_2, model_dict, char_vocab, word_vocab, max_len, device):
+def ruleEditForTrue(s1, s2):
+    diff_len = abs(len(s1) - len(s2))
+    if diff_len < (len(s1) + len(s2)) * 0.2:
+        edt_ = distance.levenshtein(s1, s2) / (len(s1) + len(s2))
+        if edt_ < 0.1:
+            return True
+    else:
+        if len(s1) < len(s2):  # 保持s1长度优先
+            s1, s2 = s2, s1
+
+        edt_ = distance_edit(s1[:len(s2)], s2)
+        if edt_ < 0.1:
+            return True
+
+        edt_ = distance_edit(s1[:-len(s2)], s2)
+        if edt_ < 0.1:
+            return True
+
+    return False
+
+
+def ruleEditForFalse(s1, s2):
     """
-    基于名称与地址的相似判定逻辑
-    :param sim_1:
-    :param sim_2:
+    基于规则判定名称不相等
+    :param s1:
+    :param s2:
     :return:
     """
 
-    if len(data_1[1]) <= 5 or len(data_2[1]) <= 5:  ### 地址为空 则略过
-        loc_sim = -1
+    diff_len = abs(len(s1) - len(s2))
+    if len(s1) == 0 or len(s2) == 0:
+        return True
+    edt_ = distance.levenshtein(s1, s2) / (len(s1) + len(s2))
+    if diff_len < (len(s1) + len(s2)) * 0.2:
+        if edt_ > 0.3:
+            return True
     else:
-        loc_1, loc_2 = dataPro(data_1[1], data_2[1], max_len, char_vocab, True)  # :XXX max_len 未统一
-        loc_sim = isSameModel([loc_1, loc_2], model_dict['loc'], device)
+        if len(s1) < len(s2):  # 保持s1长度优先
+            s1, s2 = s2, s1
+        edt_a = distance_edit(s1[:len(s2)], s2)
+        if edt_a < 0.1:
+            return False
 
-    edt_ = distance.levenshtein(data_1[0], data_2[0]) / (len(data_1[0]) + len(data_2[0]))
-    if edt_ < 0.07:
+        edt_a = distance_edit(s1[:-len(s2)], s2)
+        if edt_a < 0.1:
+            return False
+        if edt_ > 0.3:
+            return True
+    return False
+
+
+def ruleLoc(s1, s2):
+    """
+    :param s1:
+    :param s2:
+    :return:
+    """
+
+    tmp1 = ' '.join([k for k in s1.replace(',', ' ', -1).split() if len(k) != 0])
+    tmp2 = ' '.join([k for k in s2.replace(',', ' ', -1).split() if len(k) != 0])
+
+    if len(tmp1) == 0 or len(tmp2) == 0:
+        return None
+
+    jac_ = distance_jacaard(tmp1, tmp2)
+    edt_ = distance_edit(s1, s2)
+    if jac_ > 0.4 or edt_ < 0.1:
         return True
 
-    name_1, name_2 = dataPro(data_1[0], data_2[0], max_len, char_vocab, True)
-    name_1_w, name_2_w = dataPro(data_1[0], data_2[0], max_len, word_vocab, True, True)  # max_len 未统一
+    if jac_ < 0.15 and edt_ > 0.3:
+        return False
+
+    return None
+
+
+def sameLogic(key_word, data_1, data_2, model_dict, char_vocab, max_len, device):
+    """
+
+    :param key_word:
+    :param data_1:
+    :param data_2:
+    :param model_dict:
+    :param char_vocab:
+    :param max_len:
+    :param device:
+    :return:
+    """
+    if len(data_1[1]) <= 5 and len(data_2[1]) <= 5:  ### 地址为空 则略过
+        loc_sim = -2
+    elif len(data_1[1]) <= 5 or len(data_2[1]) <= 5:  ### 地址为空 则略过
+        loc_sim = -1
+    else:
+        rule_loc_ = ruleLoc(data_1[1], data_2[1])
+        if rule_loc_ is not None:
+            if rule_loc_:
+                loc_sim = 0
+            else:
+                loc_sim = 1
+        else:
+            if model_dict['segment_loc'] is None:
+                loc_1, loc_2 = dataProcessChar(data_1[1], data_2[1], max_len, char_vocab, True)  # :XXX max_len 未统一
+            else:
+                loc_1, loc_2 = dataProcessWord(data_1[1], data_2[1], max_len, max_len, model_dict['pad_id'],
+                                               model_dict['segment_loc'])  # :XXX max_len 未统一
+            loc_sim = isSameModel([loc_1, loc_2], model_dict['loc'], device)
+
+    edt_flag = ruleEditForTrue(data_1[0], data_2[0])  # 对编辑距离明显小的 归于相似
+    if edt_flag and loc_sim != 1:  # 存在风险
+        # print('EDT_RULE_{},{}'.format(data_1, data_2))
+        return True
+
+    # 对编辑距离明显大的 归于不相似
+    if ruleEditForFalse(data_1[0].replace(key_word, '').replace(' ', '', -1),
+                        data_2[0].replace(key_word, '').replace(' ', '', -1)) and loc_sim != 0:
+        # print('FASLE_RULE_{},{}'.format(data_1, data_2))
+        return False
+
+    name_1, name_2 = dataProcessChar(data_1[0], data_2[0], max_len, char_vocab, True)
+    name_1_w, name_2_w = dataProcessWord(data_1[0], data_2[0], max_len, max_len, model_dict['pad_id'], model_dict['segment'])
     name_sim_char_1 = isSameModel([name_1, name_2], model_dict['name_char_1'], device)  # model 有偏，后续可优化
     name_sim_word = isSameModel([name_1_w, name_2_w], model_dict['name_word'], device)
     name_sim_char_2 = isSameModel([name_2, name_1], model_dict['name_char_2'], device)  # model 有偏，后续可优化
     # name_sim_word = 0
 
-    print('Test processSet,{},{}'.format(data_1, data_2), name_sim_char_1, name_sim_word, name_sim_char_2, loc_sim)
+    # print('Test processSet,{},{}'.format(data_1, data_2), name_sim_char_1, name_sim_word, name_sim_char_2, loc_sim)
     # print(name_1_w, name_2_w)
 
     ###相似的逻辑处理 趋于更严格
@@ -236,7 +356,7 @@ def sameLogic(data_1, data_2, model_dict, char_vocab, word_vocab, max_len, devic
     #     return False
 
     # Version_2
-    if name_sim_char_1 + name_sim_word + name_sim_char_2 == 0:
+    if name_sim_char_1 + name_sim_word + name_sim_char_2 == 0 and loc_sim != 1:
         return True
     elif name_sim_char_1 + name_sim_word + name_sim_char_2 == 1 and loc_sim == 0:
         return True
@@ -270,12 +390,13 @@ def infoSense(path_):
 ###########################################################################################
 
 
-def processSet(sen_set, id2sentence, model_dict, char_vocab, word_vocab, max_len, device):
+def processSet(sen_set, id2sentence, model_dict, char_vocab, max_len, device):
     """
     处理set集合，获取子聚类类别
-    :param sen_set:  sen_id_set
+    :param sen_set:  sentence_ids
     :return:
     """
+
     tmp_list = list(sen_set)
     set_list = []
     while len(tmp_list) >= 1:
@@ -284,7 +405,7 @@ def processSet(sen_set, id2sentence, model_dict, char_vocab, word_vocab, max_len
 
         flag_ = []
         for k in range(1, len(tmp_list)):
-            if sameLogic(id2sentence[a], id2sentence[tmp_list[k]], model_dict, char_vocab, word_vocab,
+            if sameLogic(id2sentence[a], id2sentence[tmp_list[k]], model_dict, char_vocab,
                          max_len, device):  # 核心  相似判定
                 flag_.append(tmp_list[k])
                 a_set.add(tmp_list[k])
@@ -299,6 +420,68 @@ def processSet(sen_set, id2sentence, model_dict, char_vocab, word_vocab, max_len
     return set_list
 
 
+import functools
+
+
+def itemCmp(a1, a2):
+    """
+    针对 名称、地址条目的排序
+    :param a1:
+    :param a2:
+    :return:
+    """
+    l_1 = len(a1[0])
+    l_2 = len(a2[0])
+    if l_1 != l_2:
+        return l_1 - l_2
+    else:
+        d_1 = len(a1[1])
+        d_2 = len(a2[1])
+        return d_2 - d_1
+
+
+def processSetSort(key_word, sen_set, id2sentence, model_dict, char_vocab, max_len, device):
+    """
+
+    :param key_word: same word
+    :param sen_set: sentence_ids
+    :param id2sentence: For Sim, sentence,address
+    :param model_dict:  For Sim
+    :param char_vocab:  For Sim
+    :param word_vocab:  For Sim
+    :param max_len:     For Sim
+    :param device:      For Sim
+    :param cluster_set: flag_use
+    :return:
+    """
+    tmp_data = []
+    for id_ in sen_set:
+        tmp_data.append(id2sentence[id_] + [id_])  # 增加一个维度 id_便于后期追溯
+
+    tmp_sort_data = sorted(tmp_data, key=functools.cmp_to_key(itemCmp), reverse=True)
+
+    part_cluster_set = []
+    while len(tmp_sort_data) >= 1:
+        guard_item = tmp_sort_data[0]
+        tmp_set_id = set({guard_item[2]})
+
+        del_flag = []
+        for k in range(1, len(tmp_sort_data)):
+            if sameLogic(key_word, guard_item, tmp_sort_data[k], model_dict, char_vocab,
+                         max_len, device):  # 核心  相似判定
+                del_flag.append(tmp_sort_data[k])
+                tmp_set_id.add(tmp_sort_data[k][2])
+
+        del_flag.append(guard_item)
+        for one in del_flag:
+            tmp_sort_data.remove(one)
+
+        # print('Test Make process Set', guard_item, '\001'.join([id2sentence[tk][0] for tk in tmp_set_id]))
+        part_cluster_set.append(tmp_set_id)
+
+    return part_cluster_set
+
+
 def processCluster(word_list, word2sentenceid, id2sentence, cluster_set):
     """
     针对word2set的计算结果，更新cluster2set
@@ -307,54 +490,94 @@ def processCluster(word_list, word2sentenceid, id2sentence, cluster_set):
     :return:
     """
 
-    model_dict, char_vocab, word_vocab, max_len, device = model_init()
+    model_dict, char_vocab, max_len, device = model_init()
 
     cluster_info_ = {}
-
+    num_ = 1
     for word_ in word_list:  ###对于word 的顺序要有要求
-        word_sen_set = word2sentenceid[word_]
-        set_list = processSet(word_sen_set, id2sentence, model_dict, char_vocab, word_vocab, max_len, device)  # 分割成不同的集合
-        for set_ in set_list:
-            for id_ in set_:
-                if cluster_set[id_] == False:
-                    cluster_set[id_] = set_
-                    cluster_info_[id_] = [word_]
-                elif set_ == cluster_set[id_]:
-                    continue
-                else:
-                    # 原有与 现有集合的关系
-                    merge_ = set_ | cluster_set[id_]
-                    if len(merge_) > len(cluster_set[id_]):
-                        cluster_set[id_] = merge_
-                        for id_m in merge_:
-                            cluster_set[id_m] = merge_  # 此步骤为粗筛
-                            cluster_info_[id_].append(word_)
+        word_sen_set = word2sentenceid[word_]  # word 对应的 sentence list
+        word_sen_set = list(word_sen_set)
+        if len(word_sen_set) == 1 and cluster_set[word_sen_set[0]] is False:
+            cluster_set[word_sen_set[0]] = set([word_sen_set[0]])
+            cluster_info_[word_sen_set[0]] = [word_]
+        else:
+            todo_cluster = []
+            for id_ in word_sen_set:
+                if not cluster_set[id_]:
+                    todo_cluster.append(id_)
 
-    pickleDumpFile('cluster_set_{}.pk'.format(len(word_list)), cluster_set)
+            # 分割成不同的集合
+            print('Word_{}-len_{}', word_, len(todo_cluster))
+            set_list = processSetSort(word_, todo_cluster, id2sentence, model_dict, char_vocab, max_len, device)
+
+            ###粗筛合并的必要性
+            for set_ in set_list:
+                for id_ in set_:
+                    if cluster_set[id_] is False:
+                        cluster_set[id_] = set_
+                        cluster_info_[id_] = [word_]
+                    elif set_ == cluster_set[id_]:
+                        continue
+                    else:
+                        # 原有与 现有集合的关系  TODO   此处处理的有风险
+                        merge_ = set_ | cluster_set[id_]
+                        if len(merge_) > len(cluster_set[id_]):
+                            cluster_set[id_] = merge_
+                            print("merge_\t" + str(id_))
+                            for id_m in merge_:
+                                cluster_set[id_m] = merge_  # 此步骤为粗筛
+                                cluster_info_[id_].append(word_)
+
+        num_ += 1
+        if num_ % 10000 == 0:
+            pickleDumpFile('cluster_set_{}.pk'.format(num_), cluster_set)
 
     return cluster_info_
 
 
-def runPart(path_=BASE_PATH + '/baseDictData.pk', word_sen_path=BASE_PATH + '/word_sen_num'):
+import random
+
+
+def runPart(reload_cluster="", path_=BASE_PATH + '/baseDictData.pk', word_sen_path=BASE_PATH + '/word_sen_num'):
+    """
+
+    :param path_:
+    :param word_sen_path: 倒序排列
+    :return:
+    """
     with open(path_, 'rb') as f:
         id2sentence = pickle.load(f)
         word2sentenceid = pickle.load(f)
         cluster2set = pickle.load(f)
 
     word_dic = {}
+    word_list = []
+    word_num = []
     with open(word_sen_path, 'r') as f:
         for one in f:
             tmp_ = one.rstrip().split('\t')
             word_dic[tmp_[0]] = int(tmp_[1])
+            word_list.append(tmp_[0])
+            word_num.append(tmp_[1])
 
-    word_list = []
+    word_list = word_list[::-1]
+    word_num = word_num[::-1]
+
+    if reload_cluster != "":
+        cluster2set = pickle.load(open(reload_cluster, 'rb'))
+        num_ = int(reload_cluster.rstrip('.pk').split('_')[-1])
+        word_list = word_list[num_:]
+
+    word_tmp = []
     threld = [5, 100]
     for k in word_dic:
         if word_dic[k] >= threld[0] and word_dic[k] <= threld[1]:
-            word_list.append(k)
+            word_tmp.append(k)
 
-    # tmp_list = random.sample(word_list, 100)
+    tmp_list = random.sample(word_tmp, 50)
+    print('TMP_LIST', tmp_list)
     # XXX TODO
+    '''
     tmp_list = ['KARRSEN', 'Devices', 'ZHONGSAI', 'JINWEIXIN', 'XUYA', 'JIAOWAY', 'SMARTTSAI', 'SANITY', 'CHEERIO', 'House',
                 'MEIBAOJIE', 'TROLAND', 'LINGGU', 'SMITT', 'EQUIPMENT&TECHNOLOGY', 'DOLLY', 'KONG,CHINA', 'GAOLU', 'FIRMSTOCK',
                 'JAWNA', 'PLATIRID', 'SCHIEFFER', 'MEEZAN', 'JIEMAOIMPORTEX', 'GMBHNEULANDER', 'KAOFU', 'KHIND', 'PATTYN', 'PLASTIE',
@@ -366,10 +589,11 @@ def runPart(path_=BASE_PATH + '/baseDictData.pk', word_sen_path=BASE_PATH + '/wo
                 'Center,', 'SCARLETT', 'ALMUQADIMAH', 'TISHIELD', 'BOHOLY', 'GLODEN', 'VONWELT', 'MASTER&FRANK', 'LABORATORIES(INNER',
                 'DARVEEN', 'NORWICH', 'JOINTPOWER', 'AMERAS', 'KOLN', 'QSSIELECTRIC', 'GILMAN', 'ELECTRONICS(HUI', 'MEFU',
                 'KANGCHUNAN', 'IND.CO.,LTD.', 'SINO-CHTC', 'SHUANGMU']
+    '''
 
-    tmp_list = ['CAFFE']
+    tmp_list = ['000000005', 'SHD']
 
-    cluster_info_ = processCluster(tmp_list, word2sentenceid, id2sentence, cluster2set)
+    cluster_info_ = processCluster(word_list, word2sentenceid, id2sentence, cluster2set)
 
     infoCluster(tmp_list, cluster2set, id2sentence, cluster_info_)
 
@@ -398,13 +622,11 @@ def infoCluster(word_list, cluster2set, id2sentence, cluster_info_):
             h_ = str(hash(t_set))
             for id_ in cluster2set[k]:
                 line_.append(h_ + '\001\002' + '\t'.join(cluster_info_[id_]) + '\001\001' + '\001\001'.join(id2sentence[id_]))
-            if len(line_) < 10:
-                print('\n'.join(line_))
+            # if len(line_) < 10:
+            print('\n'.join(line_))
 
 
 # =============================================================================
-
-
 import multiprocessing
 import copy
 
@@ -463,54 +685,30 @@ def multiRun():
         print(k.get())
 
 
-#############TMP######
-import random
 import pandas as pd
 
 
-# from dssm.runData import isSameNew
+def toExcel(path_):
+    a, b, c, d = [], [], [], []
 
-
-def makePosTestData(path_):
-    """
-    构建地点信息训练数据集，用于测试 基于名称的模型效果
-    :param path_:
-    :return:
-    """
-
-    dic_ = {}
-    pos_ = []
-    num_ = 20000
-    with open(path_, 'r')  as f:
+    with open(path_, 'r') as f:
         for one in f:
-            tmp_ = one.rstrip()
-            if len(tmp_) < 3:
+            tmp_ = one.rstrip().replace('\001\002', '\001\001').split('\001\001')
+            if len(tmp_) != 4:
                 continue
-            tmp_ = tmp_.split('\001\002')
-            loc_ = [k for k in tmp_[1].split('\002') if k != 'NULL' and len(k) > 5]
-            if len(loc_) < 1:
-                continue
-            if len(loc_) > 5 and num_ > 0:
-                t_ = random.sample(loc_, 2)
-                flags_ = isSameNew(t_[0], t_[1])
-                if flags_[1] * flags_[3] * flags_[5] > 0:
-                    # if distance_jacaard(t_[0], t_[1]) > 0.5:
-                    pos_.append('\001\002'.join(t_))
-                    num_ -= 1
-            dic_[tmp_[0]] = loc_
 
-    neg_ = []
-    key_list = dic_.keys()
-    while num_ < 20000:
-        tmp_ = random.sample(key_list, 2)
-        if dic_[tmp_[0]][0] != dic_[tmp_[1]][0] and len(dic_[tmp_[0]][0]) > 10 and len(dic_[tmp_[1]][0]) > 10:
-            neg_.append(dic_[tmp_[0]][0] + "\001\002" + dic_[tmp_[1]][0])
-            num_ += 1
+            a.append(tmp_[0])
+            b.append(tmp_[1])
+            c.append(tmp_[2])
+            d.append(tmp_[3])
 
-    df = pd.DataFrame(columns=['origin', 'label'])
-    df['origin'] = pos_ + neg_
-    df['label'] = [0] * len(pos_) + [1] * len(neg_)
-    df.to_csv('../data/train_loc.csv', index=False)
+    print(len(a))
+    df = pd.DataFrame(columns=['cluster_name', 'key_word', 'name', 'loc'])
+    df['cluster_name'] = a
+    df['key_word'] = b
+    df['name'] = c
+    df['loc'] = d
+    df.to_excel('../data_1022.xlsx')
 
 
 if __name__ == '__main__':
@@ -521,4 +719,6 @@ if __name__ == '__main__':
 
     # a = model_init()
 
-    runPart()
+    runPart(sys.argv[1])
+    # print(BASE_DATA_PATH)
+    # toExcel('../log')
