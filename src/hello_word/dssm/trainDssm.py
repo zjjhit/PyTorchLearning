@@ -29,7 +29,6 @@ BASE_DATA_PATH = './data/'
 if __name__ == '__main__':
     if len(sys.argv) > 1:
         config_path = sys.argv[1]
-        # dataset = pd.read_csv(BASE_DATA_PATH + '/train_new.csv')  # processed_train.csv
         dataset = pd.read_csv(sys.argv[2])
     else:
         BASE_DATA_PATH = '../data/'
@@ -41,7 +40,6 @@ if __name__ == '__main__':
 
     if '-1' not in config.gpu:
         os.environ["CUDA_VISIBLE_DEVICES"] = config.gpu
-        print('CUDA_VISIBLE_DEVICES\t' + config.gpu)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else:
         device = 'cpu'
@@ -101,19 +99,11 @@ if __name__ == '__main__':
 
     ###优化器定义
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, amsgrad=True)
-    # fc_params = list(map(id, model.fc.parameters()))
-    # conv1d_params = filter(lambda p: id(p) not in fc_params, model.parameters())
-    # params = [
-    #     {"params": model.fc.parameters(), "lr": 1e-2},
-    #     {"params": conv1d_params, "lr": 1e-3},
-    # ]
 
     kf = KFold(n_splits=20, shuffle=True)
-
+    best_loss = 100000
     for ll_ in range(config.nums + 1):
         for k, (train_index, val_index) in enumerate(kf.split(range(len(dataset)))):
-            # if k >= 10:
-            #     break
 
             train = dataset.iloc[train_index]
             val = dataset.iloc[val_index]
@@ -124,11 +114,6 @@ if __name__ == '__main__':
 
             print('Start train {} ford {}'.format(k, len(train_base)))
 
-            # if True:
-            #     break
-
-            best_loss = 100000
-
             stop_theld = 0  # >3 stop
             stop_value = 0.05
             old_total = best_loss
@@ -138,13 +123,11 @@ if __name__ == '__main__':
 
                 total_loss = 0
                 model.train()
-                print('num_train,P_{}'.format(len(train)))
+
                 for i, data_set in enumerate(train):
 
                     data = {key: value.to(device) for key, value in data_set.items() if key != 'origin_'}
-
                     optimizer.zero_grad()
-
                     y_pred = model(data)
                     b_, _ = y_pred.shape
 
@@ -176,11 +159,10 @@ if __name__ == '__main__':
 
                     total_loss += loss.data.item()
 
-                    if i % 3 == 0:
+                    if i % 10 == 0:
 
                         with torch.no_grad():
                             model.eval()
-
                             loss_val = 0
                             for v_, data_set in enumerate(val):
                                 data = {key: value.to(device) for key, value in data_set.items() if key != 'origin_'}
@@ -209,7 +191,7 @@ if __name__ == '__main__':
 
                         model.train()
 
-                print('total_loss ford and epochs ,{} ,{},loss is {}'.format(k, n_, total_loss))
+                print('total_loss ford and epochs ,{} ,{} ,{},loss is {}'.format(ll_, k, n_, total_loss))
 
                 if abs(total_loss - old_total) <= stop_value:
                     stop_theld += 1

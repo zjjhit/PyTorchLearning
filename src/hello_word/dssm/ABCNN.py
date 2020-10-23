@@ -191,15 +191,16 @@ class Abcnn2(nn.Module):
 
         self.abcnn = nn.ModuleList()
         self.conv = nn.ModuleList()
-        self.ap = nn.ModuleList([ApLayer(emb_dim)])
-        self.fc = nn.Linear(layer_size + 1, 2)
-
+        self.ap = nn.ModuleList([ApLayer(sentence_length)])
+        self.fc_1 = nn.Linear(filter_channel * 2, sentence_length)
+        self.fc_2 = nn.Linear(sentence_length * 2, 2)
+        self.relu_1 = nn.LeakyReLU()
         for i in range(layer_size):
             self.abcnn.append(Abcnn2Portion(sentence_length, filter_width))
             self.conv.append(
                 ConvLayer(True, sentence_length, filter_width, emb_dim if i == 0 else filter_channel, filter_channel,
                           False))  # first flag_ 1 channel
-            self.ap.append(ApLayer(filter_channel))
+            self.ap.append(ApLayer(sentence_length + filter_width - 1))
 
     def forward(self, x1, x2):
         '''
@@ -221,25 +222,30 @@ class Abcnn2(nn.Module):
         output : 2-D torch Tensor
             size (batch_size, 1)
         '''
-        sim = []
-        sim.append(self.distance(self.ap[0](x1), self.ap[0](x2)))
+        vec_a = [self.ap[0](x1)]
+        vec_b = [self.ap[0](x2)]
+        # sim.append(self.distance(self.ap[0](x1), self.ap[0](x2)))
         # sim += [self.ap[0](x1), self.ap[0](x2)]
-
         for i in range(self.layer_size):
             x1 = self.conv[i](x1)
             # print('conv', x1.shape)
             x2 = self.conv[i](x2)
-            sim.append(self.distance(self.ap[i + 1](x1), self.ap[i + 1](x2)))
+            # sim.append(self.distance(self.ap[i + 1](x1), self.ap[i + 1](x2)))
             # print('ap', self.ap[i + 1](x1).shape)
+            vec_a.append(self.ap[i + 1](x1.permute(0, 1, 3, 2)))
+            vec_b.append(self.ap[i + 1](x2.permute(0, 1, 3, 2)))
             x1, x2 = self.abcnn[i](x1, x2)
             # print('abcnn', x1.shape, x2.shape)
             # sim += [self.ap[i + 1](x1), self.ap[i + 1](x2)]
 
-        # for k in sim:
-        #     print('cat', k.shape)
-        sim_fc = torch.cat(sim, dim=1)
+        vec_a_fc = self.relu_1(self.fc_1(torch.cat(vec_a[1:], dim=1)))
+        vec_b_fc = self.relu_1(self.fc_1(torch.cat(vec_b[1:], dim=1)))
+        # print(vec_a_fc, vec_b_fc)
 
-        output = self.fc(sim_fc)
+        # vec_a_fc += vec_a[0]
+        # vec_b_fc += vec_b[0]
+        # print(vec_a_fc.shape, vec_b_fc.shape)
+        output = self.fc_2(torch.cat((vec_a_fc, vec_b_fc), dim=1))
         return output
 
 
@@ -454,7 +460,8 @@ class ApLayer(nn.Module):
 
     def __init__(self, width):
         super(ApLayer, self).__init__()
-        self.ap = nn.AvgPool2d((1, width), stride=1)
+        # self.ap = nn.AvgPool2d((1, width), stride=1)
+        self.ap = nn.MaxPool2d((1, width), stride=1)
 
     def forward(self, x):
         '''

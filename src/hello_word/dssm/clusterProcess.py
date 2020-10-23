@@ -493,7 +493,7 @@ def processCluster(word_list, word2sentenceid, id2sentence, cluster_set):
     model_dict, char_vocab, max_len, device = model_init()
 
     cluster_info_ = {}
-    num_ = 1
+    num_ = 610001
     for word_ in word_list:  ###对于word 的顺序要有要求
         word_sen_set = word2sentenceid[word_]  # word 对应的 sentence list
         word_sen_set = list(word_sen_set)
@@ -565,8 +565,9 @@ def runPart(reload_cluster="", path_=BASE_PATH + '/baseDictData.pk', word_sen_pa
 
     if reload_cluster != "":
         cluster2set = pickle.load(open(reload_cluster, 'rb'))
-        num_ = int(reload_cluster.rstrip('.pk').split('_')[-1])
-        word_list = word_list[num_:]
+        # num_ = int(reload_cluster.rstrip('.pk').split('_')[-1])
+        # word_list = word_list[num_:]
+        word_list = word_list[610000:]
 
     word_tmp = []
     threld = [5, 100]

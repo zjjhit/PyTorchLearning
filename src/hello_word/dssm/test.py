@@ -34,7 +34,7 @@ def test():
     data_base = DSSMCharDataset(dataset, vacab, config)  # same with the config_4
     data = DataLoader(data_base, batch_size=100)
 
-    model = torch.load(BASE_DATA_PATH + 'model/name_ab3__best_model_char_ab1_5_1_69_ford.pt',
+    model = torch.load(BASE_DATA_PATH + 'model/name_ab3__best_model_word_ab1_3_0_0_ford.pt',
                        map_location=lambda storage, loc: storage)
 
     with torch.no_grad():
@@ -88,12 +88,13 @@ from dssm.utils import SegmentWord
 
 def testOne(s1, s2):
     device = 'cpu'
-    config_path = '../data/config.json_loc_8'
+    config_path = '../data/config.json_ab_1'
     config = BertConfig.from_pretrained(config_path)
-    model = torch.load(BASE_DATA_PATH + 'model/loc__best_model_word_8_5_0_15_ford.pt', map_location=lambda storage, loc: storage)
+    model = torch.load(BASE_DATA_PATH + 'model/name_ab3__best_model_word_ab1_1_0_40_ford.pt',
+                       map_location=lambda storage, loc: storage)
     if config.segment_type == 'word':
         segment_ = SegmentWord(config.segment_model)
-        name_1, name_2 = dataProcessWord(s1, s2, config.max_len, config.max_len, config.pad_id, segment_)
+        name_1, name_2 = dataProcessWord(s1, s2, config.max_len, config.max_word, config.pad_id, segment_)
         print(segment_.encodeAsPieces(s1))
         print(segment_.encodeAsPieces(s2))
     else:
@@ -122,14 +123,14 @@ from dssm.clusterProcess import ruleLoc
 
 if __name__ == '__main__':
     pass
-    # test()
+    test()
 
-    a = "NO 301 QINHE ROAD KUNSHAN CITY JIANGSU CHINA"
-    b = " NO 199 TONGQIU ROAD KUNSHAN CITY JIANGSU CHINA"
+    a = "ZHEJIANG HENGFENG TOP LEISURE CO LTD"
+    b = "BINZHOU HENGFENG RUBBERCO LTD"
     s1 = [a, 'NULL']
     s2 = [b, 'NULL']
 
-    # testOne(s1[0], s2[0])
+    testOne(s1[0], s2[0])
 
     # testSigle(s1, s2)
 

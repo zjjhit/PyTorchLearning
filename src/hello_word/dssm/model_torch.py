@@ -560,7 +560,7 @@ class DSSMAbcnn1(nn.Module):
         # emb_dim, sentence_length, filter_width, filter_channel=100, layer_size=2, match='cosine',inception = True
 
         self.emb = nn.Embedding(config.vocab_size, config.emb_dim, config.pad_id)
-        self.abcnn2 = Abcnn2(config.emb_dim, config.sentence_length, config.filter_width, layer_size=config.layer_size)
+        self.abcnn2 = Abcnn2(config.emb_dim, config.sentence_length, config.filter_width)
 
     # def to(self, device):
     #     self.emb.to(device)

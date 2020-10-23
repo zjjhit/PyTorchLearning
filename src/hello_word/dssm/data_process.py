@@ -69,12 +69,10 @@ class DSSMCharDataset(Dataset):
             query_ = query_[:min(len(query_), self.max_len)]
             # convert to ids
             query_ids = self.convert_tokens_to_ids(query_)
-            # query_ids = query_ids + [self.pad_id] * (self.max_len - len(query_ids))
 
             doc_ = text_[1]
             doc_ = doc_[:min(len(doc_), self.max_len)]
             doc_ids = self.convert_tokens_to_ids(doc_)
-            # doc_ids = doc_ids + [self.pad_id] * (self.max_len - len(doc_ids))
 
             output = {
                 'origin_': item['origin'],
