@@ -12,5 +12,6 @@
   "nums": 10,
   "loss": "cross",
   "gpu": "1",
-  "id": 4
+  "id": 5,
+  "reload": "none"
 }
