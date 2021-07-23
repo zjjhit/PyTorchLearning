@@ -11,6 +11,7 @@ from allennlp.data.instance import Instance
 from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
 from allennlp.data.tokenizers import Token
 from overrides import overrides
+
 from utils.helpers import SEQ_DELIMETERS, START_TOKEN
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name

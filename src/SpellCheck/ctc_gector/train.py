@@ -7,6 +7,7 @@ from allennlp.data.iterators import BucketIterator
 from allennlp.data.vocabulary import DEFAULT_OOV_TOKEN, DEFAULT_PADDING_TOKEN
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
+
 from gector.bert_token_embedder import PretrainedBertEmbedder
 from gector.datareader import Seq2LabelsDatasetReader
 from gector.seq2labels_model import Seq2Labels
@@ -156,7 +157,7 @@ def main(args):
     iterator = BucketIterator(batch_size=args.batch_size,
                               sorting_keys=[("tokens", "num_tokens")],
                               biggest_batch_first=True,
-                              max_instances_in_memory=args.batch_size * 5000,
+                              max_instances_in_memory=args.batch_size * 3000,
                               # max_instances_in_memory=instances_per_epoch,
                               instances_per_epoch=instances_per_epoch,
                               )
@@ -194,7 +195,9 @@ def main(args):
     trainer.train()
 
     # Here's how to save the model.
-    out_model = os.path.join(args.model_dir, 'model.th')
+    import time
+    time_ = time.strftime("%Y-%m-%d-%H", time.localtime())
+    out_model = os.path.join(args.model_dir, time_ + 'model.th')
     with open(out_model, 'wb') as f:
         torch.save(model.state_dict(), f)
     print("Model is dumped")

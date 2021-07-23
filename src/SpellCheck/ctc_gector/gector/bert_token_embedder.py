@@ -226,6 +226,7 @@ class BertEmbedder(TokenEmbedder):
 
 # @TokenEmbedder.register("bert-pretrained")
 class PretrainedBertEmbedder(BertEmbedder):
+
     """
     Parameters
     ----------

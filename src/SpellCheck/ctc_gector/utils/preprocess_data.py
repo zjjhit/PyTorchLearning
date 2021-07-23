@@ -3,9 +3,10 @@ from difflib import SequenceMatcher
 
 import Levenshtein
 import numpy as np
-from helpers import write_lines, read_parallel_lines, encode_verb_form, \
-    apply_reverse_transformation, SEQ_DELIMETERS, START_TOKEN
 from tqdm import tqdm
+
+from .helpers import write_lines, read_parallel_lines, encode_verb_form, \
+    apply_reverse_transformation, SEQ_DELIMETERS, START_TOKEN
 
 
 def perfect_align(t, T, insertions_allowed=0,
@@ -495,4 +496,5 @@ if __name__ == '__main__':
                         default=128)
 
     args = parser.parse_args()
+
     main(args)

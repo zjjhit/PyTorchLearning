@@ -3,12 +3,15 @@
 set -e
 set -v
 
-BASE_DIR=/your_base_dir
-TRAIN_PATH=/your_train_path/train.gector
-VALID_PATH=/your_valid_path/valid.gector
-BASE_MODEL=/pytorch_bert_model
+BASE_MODEL=/home/zjj/Data/SpellCheck/Chinese/ctc2021_baseline
+
+BASE_DIR=/home/zjj/SpellCheck/ctc_gector/
+
+TRAIN_PATH=/home/zjj/Data/SpellCheck/Chinese/TrainData/train.data
+VALID_PATH=/home/zjj/Data/SpellCheck/Chinese/TrainData/dev.data
+
 VOCAB_PATH=$BASE_DIR/data/output_vocabulary/
-SAVE_MODEL=/save_dir
+SAVE_MODEL=/home/zjj/Data/SpellCheck/Chinese/Save_Model/
 NUM_EPOCH=10
 UPDATE_PER_EPOCH=1000
 

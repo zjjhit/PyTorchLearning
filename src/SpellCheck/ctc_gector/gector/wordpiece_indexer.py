@@ -9,6 +9,7 @@ from allennlp.data.tokenizers.token import Token
 from allennlp.data.vocabulary import Vocabulary
 from overrides import overrides
 from transformers import BertTokenizer
+
 from utils.helpers import START_TOKEN
 
 logger = logging.getLogger(__name__)
@@ -423,7 +424,7 @@ class PretrainedBertIndexer(WordpieceIndexer):
         # if "roberta" in pretrained_model:
         #    bpe_ranks = bert_tokenizer.bpe_ranks
         #    byte_encoder = bert_tokenizer.byte_encoder
-        # else:
+        #else:
         bpe_ranks = {}
         byte_encoder = None
 

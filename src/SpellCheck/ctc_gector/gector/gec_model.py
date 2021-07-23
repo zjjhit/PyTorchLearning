@@ -12,6 +12,7 @@ from allennlp.data.tokenizers import Token
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
 from allennlp.nn import util
+
 from gector.bert_token_embedder import PretrainedBertEmbedder
 from gector.seq2labels_model import Seq2Labels
 from gector.wordpiece_indexer import PretrainedBertIndexer
@@ -78,6 +79,7 @@ class GecBERTModel(object):
 
         self.indexers = []
         self.models = []
+        print(type(model_paths), model_paths)
         for model_path in model_paths:
             # if is_ensemble:
             # model_name, special_tokens_fix = self._get_model_data(model_path)
@@ -137,7 +139,7 @@ class GecBERTModel(object):
     def predict(self, batches):
         t11 = time()
         predictions = []
-        for batch, model in zip(batches, self.models):
+        for batch, model in zip(batches, self.models):  ##index 与 model 对齐
             batch = util.move_to_device(batch.as_tensor_dict(), 0 if torch.cuda.is_available() else -1)
             with torch.no_grad():
                 prediction = model.forward(**batch)
@@ -217,7 +219,7 @@ class GecBERTModel(object):
     def _convert(self, data):
         all_class_probs = torch.zeros_like(data[0]['class_probabilities_labels'])
         error_probs = torch.zeros_like(data[0]['max_error_probability'])
-        for output, weight in zip(data, self.model_weights):
+        for output, weight in zip(data, self.model_weights):  ##不同模型的权重
             all_class_probs += weight * output['class_probabilities_labels'] / sum(self.model_weights)
             error_probs += weight * output['max_error_probability'] / sum(self.model_weights)
 
@@ -302,7 +304,7 @@ class GecBERTModel(object):
         pred_ids = [i for i in range(len(full_batch)) if i not in short_ids]
         total_updates = 0
 
-        for n_iter in range(self.iterations):
+        for n_iter in range(self.iterations):  ##多轮次进行纠错
             orig_batch = [final_batch[i] for i in pred_ids]
 
             sequences = self.preprocess(orig_batch)

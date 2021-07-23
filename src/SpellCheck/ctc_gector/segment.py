@@ -3,8 +3,9 @@
 
 import sys
 
-import tokenization
 from tqdm import tqdm
+
+import tokenization
 
 tokenizer = tokenization.FullTokenizer(vocab_file="vocab.txt", do_lower_case=True)
 
@@ -19,3 +20,4 @@ for line in tqdm(sys.stdin):
 
     tokens = tokenizer.tokenize(line)
     print(' '.join(tokens))
+

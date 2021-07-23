@@ -72,6 +72,7 @@ class Seq2Labels(Model):
         self.confidence = confidence
         self.incorr_index = self.vocab.get_token_index("INCORRECT",
                                                        namespace=detect_namespace)
+        print(type(self.incorr_index), self.incorr_index)
 
         self._verbose_metrics = verbose_metrics
         self.predictor_dropout = TimeDistributed(torch.nn.Dropout(predictor_dropout))

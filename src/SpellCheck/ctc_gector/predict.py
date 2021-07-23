@@ -50,20 +50,21 @@ def main(args):
 
 if __name__ == '__main__':
     # read parameters
+    Base_path = '/home/zjj/Data/SpellCheck/Chinese/'
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path',
                         help='Path to the model file.', nargs='+',
-                        required=True)
+                        default=[Base_path + 'ctc2021_baseline' + '/pytorch_model.bin'])
     parser.add_argument('--vocab_path',
                         help='Path to the model file.',
                         default='data/output_vocabulary'  # to use pretrained models
                         )
     parser.add_argument('--input_file',
                         help='Path to the evalset file',
-                        required=True)
+                        default=Base_path + 'dev_input.txt.tok')
     parser.add_argument('--output_file',
                         help='Path to the output file',
-                        required=True)
+                        default=Base_path + 'dev_input.txt' + '.out')
     parser.add_argument('--max_len',
                         type=int,
                         help='The max sentence length'
@@ -85,7 +86,7 @@ if __name__ == '__main__':
     parser.add_argument('--transformer_model',
                         # choices=['bert', 'gpt2', 'transformerxl', 'xlnet', 'distilbert', 'roberta', 'albert'],
                         help='Name of the transformer model.',
-                        default='roberta')
+                        default=Base_path + '/ctc2021_baseline')
     parser.add_argument('--iteration_count',
                         type=int,
                         help='The number of iterations of the model.',
@@ -104,7 +105,7 @@ if __name__ == '__main__':
                         type=int,
                         help='Whether to fix problem with [CLS], [SEP] tokens tokenization. '
                              'For reproducing reported results it should be 0 for BERT/XLNet and 1 for RoBERTa.',
-                        default=1)
+                        default=0)
     parser.add_argument('--is_ensemble',
                         type=int,
                         help='Whether to do ensembling.',
